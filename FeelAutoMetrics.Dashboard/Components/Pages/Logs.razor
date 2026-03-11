@@ -95,14 +95,14 @@
                     @foreach (var log in logs)
                     {
                         var isBanned = bannedSet.Contains(log.ClientHost);
-                        <tr class="align-middle @(log.IsSuspicious ? "table-danger bg-opacity-10" : "") @(isBanned ? "opacity-50" : "")">
+                        <tr class="align-middle @(isBanned ? "opacity-50" : "")" style="@(log.IsSuspicious ? "background-color: rgba(220, 53, 69, 0.15); color: #ff8a8a;" : "")">
                             <td class="small text-muted">@log.Timestamp.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
                             <td><span class="badge bg-secondary opacity-75">@log.RequestHost</span></td>
                             <td class="text-light small font-monospace">
                                 @log.ClientHost
                                 @if (isBanned)
                                 {
-                                    <span class="badge bg-info ms-1">banni</span>
+                                    <span class="badge bg-danger ms-1">banni</span>
                                 }
                             </td>
                             <td class="text-truncate" style="max-width: 300px;">
