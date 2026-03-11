@@ -78,6 +78,44 @@ if (!string.IsNullOrEmpty(apiKey))
     });
 }
 
+// === IP Ban Check (ForwardAuth pour Traefik) ===
+// Cache en mémoire des IPs bannies, refresh toutes les 30s
+var _bannedCache = new HashSet<string>();
+var _bannedCacheExpiry = DateTimeOffset.MinValue;
+var _bannedCacheLock = new object();
+
+async Task<HashSet<string>> GetBannedIpsAsync(IDbContextFactory<AppDbContext> factory)
+{
+    if (DateTimeOffset.UtcNow < _bannedCacheExpiry)
+        lock (_bannedCacheLock) return _bannedCache;
+
+    using var db = await factory.CreateDbContextAsync();
+    var ips = await db.BannedIps.Where(b => b.IsActive).Select(b => b.IpAddress).ToListAsync();
+    var set = ips.ToHashSet();
+    lock (_bannedCacheLock)
+    {
+        _bannedCache = set;
+        _bannedCacheExpiry = DateTimeOffset.UtcNow.AddSeconds(30);
+    }
+    return set;
+}
+
+// Endpoint ForwardAuth : Traefik appelle cet endpoint avant chaque requête
+// Retourne 200 si l'IP est autorisée, 403 si bannie
+app.MapGet("/api/security/check", async (HttpContext ctx, [FromServices] IDbContextFactory<AppDbContext> dbFactory) =>
+{
+    // Traefik envoie l'IP originale dans X-Forwarded-For
+    var clientIp = ctx.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',').First().Trim()
+        ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "";
+
+    var banned = await GetBannedIpsAsync(dbFactory);
+    if (banned.Contains(clientIp))
+    {
+        return Results.StatusCode(403);
+    }
+    return Results.Ok();
+}).WithName("IpBanCheck");
+
 // Root endpoint for health check
 app.MapGet("/", () => Results.Ok(new
 {
