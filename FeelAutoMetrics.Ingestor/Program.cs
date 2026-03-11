@@ -53,6 +53,28 @@ if (app.Environment.IsDevelopment())
 
 // Pas de UseHttpsRedirection() : Traefik gère le TLS en amont
 
+// API Key middleware : protège les endpoints /api/*
+var apiKey = app.Configuration["Security:ApiKey"];
+if (!string.IsNullOrEmpty(apiKey))
+{
+    app.Use(async (context, next) =>
+    {
+        var path = context.Request.Path.Value ?? "";
+        if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+        {
+            var providedKey = context.Request.Headers["X-Api-Key"].FirstOrDefault()
+                ?? context.Request.Query["apikey"].FirstOrDefault();
+            if (providedKey != apiKey)
+            {
+                context.Response.StatusCode = 401;
+                await context.Response.WriteAsync("Unauthorized: Invalid API key.");
+                return;
+            }
+        }
+        await next();
+    });
+}
+
 // Root endpoint for health check
 app.MapGet("/", () => Results.Ok(new
 {

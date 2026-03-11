@@ -4,6 +4,7 @@ const axios = require('axios');
 // Configuration
 const INGESTOR_URL = process.env.INGESTOR_URL || 'https://localhost:7123/api/logs/ingest';
 const CONTAINER_NAME = process.env.CONTAINER_NAME || 'dokploy-traefik';
+const API_KEY = process.env.API_KEY || '';
 
 // Désactiver la vérification SSL en dev si nécessaire
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -27,7 +28,8 @@ function startShipping() {
                 // Ignorer les logs d'erreur Traefik (pas des access logs)
                 if (!json.ClientHost) continue;
 
-                axios.post(INGESTOR_URL, json)
+                const headers = API_KEY ? { 'X-Api-Key': API_KEY } : {};
+                axios.post(INGESTOR_URL, json, { headers })
                     .catch(err => {
                         console.error(`❌ Erreur d'envoi [${err.code}]: ${err.message}`);
                     });

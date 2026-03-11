@@ -189,6 +189,7 @@
 @code {
     private List<GlobalAccessLog>? logs;
     private string ingestorBaseUrl = "";
+    private string ingestorApiKey = "";
 
     // Pagination
     private int currentPage = 1;
@@ -210,6 +211,7 @@
     protected override async Task OnInitializedAsync()
     {
         ingestorBaseUrl = Configuration["IngestorBaseUrl"] ?? "http://localhost:5001";
+        ingestorApiKey = Configuration["IngestorApiKey"] ?? "";
         await LoadDomains();
         await RefreshLogs();
     }
@@ -307,7 +309,8 @@
     {
         var from = DateTime.UtcNow.AddDays(-30).ToString("yyyy-MM-dd");
         var to = DateTime.UtcNow.ToString("yyyy-MM-dd");
-        return $"{ingestorBaseUrl}/api/export/{type}?format={format}&from={from}&to={to}";
+        var keyParam = !string.IsNullOrEmpty(ingestorApiKey) ? $"&apikey={ingestorApiKey}" : "";
+        return $"{ingestorBaseUrl}/api/export/{type}?format={format}&from={from}&to={to}{keyParam}";
     }
 
     private async Task OnSearchKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
