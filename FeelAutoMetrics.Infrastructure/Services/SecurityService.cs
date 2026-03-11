@@ -178,23 +178,37 @@ public class SecurityService : ISecurityService
             points = 20;
         }
 
-        // 10. Rafale de requêtes (scraping/crawling agressif — 30+ req en 10s)
+        // 10. Rafale de requêtes (scraping/crawling agressif)
+        // Seuil élevé pour éviter les faux positifs Next.js (prefetch RSC = ~15 req/burst)
+        // On exclut les assets statiques du compteur
         {
-            var nowReq = DateTimeOffset.UtcNow;
-            var reqBurst = _requestBursts.AddOrUpdate(log.ClientHost,
-                (1, nowReq),
-                (_, old) =>
-                {
-                    if ((nowReq - old.WindowStart).TotalSeconds > 10)
-                        return (1, nowReq);
-                    return (old.Count + 1, old.WindowStart);
-                });
+            var isStaticAsset = pathLower.StartsWith("/_next/") ||
+                                pathLower.StartsWith("/favicon") ||
+                                pathLower.EndsWith(".css") ||
+                                pathLower.EndsWith(".js") ||
+                                pathLower.EndsWith(".png") ||
+                                pathLower.EndsWith(".jpg") ||
+                                pathLower.EndsWith(".svg") ||
+                                pathLower.EndsWith(".woff2");
 
-            if (reqBurst.Count >= 30 && threatType == null)
+            if (!isStaticAsset)
             {
-                threatType = "RequestBurst";
-                points = 50; // Ban après ~4 rafales (200pts)
-                _requestBursts.TryRemove(log.ClientHost, out _);
+                var nowReq = DateTimeOffset.UtcNow;
+                var reqBurst = _requestBursts.AddOrUpdate(log.ClientHost,
+                    (1, nowReq),
+                    (_, old) =>
+                    {
+                        if ((nowReq - old.WindowStart).TotalSeconds > 10)
+                            return (1, nowReq);
+                        return (old.Count + 1, old.WindowStart);
+                    });
+
+                if (reqBurst.Count >= 60 && threatType == null)
+                {
+                    threatType = "RequestBurst";
+                    points = 100; // Ban après 2 rafales (200pts)
+                    _requestBursts.TryRemove(log.ClientHost, out _);
+                }
             }
         }
 
