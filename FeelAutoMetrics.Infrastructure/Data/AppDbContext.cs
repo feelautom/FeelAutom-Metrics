@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<AppEvent> AppEvents { get; set; }
     public DbSet<BannedIp> BannedIps { get; set; }
     public DbSet<ExcludedIp> ExcludedIps { get; set; }
+    public DbSet<IpThreatScore> IpThreatScores { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,6 +40,13 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.IpAddress).IsUnique();
             entity.Property(e => e.IpAddress).IsRequired().HasMaxLength(45);
+        });
+
+        // Configuration IpThreatScore
+        modelBuilder.Entity<IpThreatScore>(entity =>
+        {
+            entity.HasKey(e => e.IpAddress);
+            entity.Property(e => e.IpAddress).HasMaxLength(45);
         });
 
         // Configuration ExcludedIp

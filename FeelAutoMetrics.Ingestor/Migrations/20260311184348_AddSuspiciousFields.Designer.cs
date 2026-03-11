@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using FeelAutoMetrics.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FeelAutoMetrics.Ingestor.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260311184348_AddSuspiciousFields")]
+    partial class AddSuspiciousFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -90,9 +93,6 @@ namespace FeelAutoMetrics.Ingestor.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("BanCount")
-                        .HasColumnType("integer");
-
                     b.Property<DateTimeOffset>("BannedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -103,9 +103,6 @@ namespace FeelAutoMetrics.Ingestor.Migrations
                         .IsRequired()
                         .HasMaxLength(45)
                         .HasColumnType("character varying(45)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("Reason")
                         .HasColumnType("text");
@@ -267,26 +264,6 @@ namespace FeelAutoMetrics.Ingestor.Migrations
                     b.HasIndex("Timestamp");
 
                     b.ToTable("GlobalAccessLogs");
-                });
-
-            modelBuilder.Entity("FeelAutoMetrics.Shared.Models.IpThreatScore", b =>
-                {
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(45)
-                        .HasColumnType("character varying(45)");
-
-                    b.Property<DateTimeOffset>("FirstSeen")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("LastHit")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Score")
-                        .HasColumnType("integer");
-
-                    b.HasKey("IpAddress");
-
-                    b.ToTable("IpThreatScores");
                 });
 #pragma warning restore 612, 618
         }

@@ -19,7 +19,7 @@ var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
 dataSourceBuilder.EnableDynamicJson();
 var dataSource = dataSourceBuilder.Build();
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+builder.Services.AddPooledDbContextFactory<AppDbContext>(options =>
     options.UseNpgsql(dataSource, b => b.MigrationsAssembly("FeelAutoMetrics.Ingestor")));
 
 // Enrichment Services
@@ -39,9 +39,9 @@ builder.Services.AddHostedService<LogRetentionService>();
 var app = builder.Build();
 
 // Auto-migrate on startup
-using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var factory = app.Services.GetRequiredService<IDbContextFactory<AppDbContext>>();
+    using var db = await factory.CreateDbContextAsync();
     await db.Database.MigrateAsync();
 }
 
@@ -63,7 +63,7 @@ app.MapGet("/", () => Results.Ok(new
 .WithName("HealthCheck");
 
 // Ingestion Endpoint (Traefik Logs)
-app.MapPost("/api/logs/ingest", async ([FromBody] object rawLog, [FromServices] ILogProcessor processor, [FromServices] AppDbContext db) =>
+app.MapPost("/api/logs/ingest", async ([FromBody] object rawLog, [FromServices] ILogProcessor processor, [FromServices] IDbContextFactory<AppDbContext> dbFactory) =>
 {
     try
     {
@@ -71,6 +71,7 @@ app.MapPost("/api/logs/ingest", async ([FromBody] object rawLog, [FromServices] 
         if (string.IsNullOrEmpty(rawJson)) return Results.BadRequest("Empty log body.");
 
         var log = await processor.ProcessAsync(rawJson);
+        using var db = await dbFactory.CreateDbContextAsync();
         db.GlobalAccessLogs.Add(log);
         await db.SaveChangesAsync();
 
@@ -84,12 +85,13 @@ app.MapPost("/api/logs/ingest", async ([FromBody] object rawLog, [FromServices] 
 .WithName("IngestLog");
 
 // Ingestion Endpoint (App Events)
-app.MapPost("/api/events", async ([FromBody] AppEvent appEvent, [FromServices] AppDbContext db) =>
+app.MapPost("/api/events", async ([FromBody] AppEvent appEvent, [FromServices] IDbContextFactory<AppDbContext> dbFactory) =>
 {
     try
     {
         if (appEvent.Timestamp == default) appEvent.Timestamp = DateTimeOffset.UtcNow;
 
+        using var db = await dbFactory.CreateDbContextAsync();
         db.AppEvents.Add(appEvent);
         await db.SaveChangesAsync();
 
@@ -117,10 +119,11 @@ app.MapGet("/api/export/logs", async (
     [FromQuery] string? domain,
     [FromQuery] string? from,
     [FromQuery] string? to,
-    [FromServices] AppDbContext db) =>
+    [FromServices] IDbContextFactory<AppDbContext> dbFactory) =>
 {
     var fmt = (format ?? "json").ToLowerInvariant();
 
+    using var db = await dbFactory.CreateDbContextAsync();
     IQueryable<GlobalAccessLog> query = db.GlobalAccessLogs;
 
     if (!string.IsNullOrEmpty(domain))
@@ -153,10 +156,11 @@ app.MapGet("/api/export/events", async (
     [FromQuery] string? format,
     [FromQuery] string? from,
     [FromQuery] string? to,
-    [FromServices] AppDbContext db) =>
+    [FromServices] IDbContextFactory<AppDbContext> dbFactory) =>
 {
     var fmt = (format ?? "json").ToLowerInvariant();
 
+    using var db = await dbFactory.CreateDbContextAsync();
     IQueryable<AppEvent> query = db.AppEvents;
 
     if (DateTimeOffset.TryParseExact(from, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var fromDate))
@@ -189,64 +193,80 @@ const string BanFilePath = "/app/Security/banned-ips.txt";
 // Nettoie les bans expirés et écrit la liste active dans un fichier pour sync iptables
 async Task SyncBanFile(AppDbContext db)
 {
-    // Supprimer les bans expirés
+    // Désactiver les bans expirés
     var expired = await db.BannedIps
-        .Where(b => b.ExpiresAt != null && b.ExpiresAt < DateTimeOffset.UtcNow)
+        .Where(b => b.IsActive && b.ExpiresAt != null && b.ExpiresAt < DateTimeOffset.UtcNow)
         .ToListAsync();
     if (expired.Any())
     {
-        db.BannedIps.RemoveRange(expired);
+        foreach (var b in expired) b.IsActive = false;
         await db.SaveChangesAsync();
     }
 
-    var ips = await db.BannedIps.Select(b => b.IpAddress).ToListAsync();
+    var ips = await db.BannedIps.Where(b => b.IsActive).Select(b => b.IpAddress).ToListAsync();
     var dir = Path.GetDirectoryName(BanFilePath);
     if (dir != null) Directory.CreateDirectory(dir);
     await File.WriteAllLinesAsync(BanFilePath, ips);
 }
 
 // Init: sync le fichier au démarrage
-using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var factory = app.Services.GetRequiredService<IDbContextFactory<AppDbContext>>();
+    using var db = await factory.CreateDbContextAsync();
     await SyncBanFile(db);
 }
 
-app.MapGet("/api/security/bans", async ([FromServices] AppDbContext db) =>
+app.MapGet("/api/security/bans", async ([FromServices] IDbContextFactory<AppDbContext> dbFactory) =>
 {
-    var bans = await db.BannedIps.OrderByDescending(b => b.BannedAt).ToListAsync();
+    using var db = await dbFactory.CreateDbContextAsync();
+    var bans = await db.BannedIps.Where(b => b.IsActive).OrderByDescending(b => b.BannedAt).ToListAsync();
     return Results.Ok(bans);
 }).WithName("ListBans");
 
-app.MapPost("/api/security/ban", async ([FromBody] BanRequest request, [FromServices] AppDbContext db) =>
+app.MapPost("/api/security/ban", async ([FromBody] BanRequest request, [FromServices] IDbContextFactory<AppDbContext> dbFactory) =>
 {
     if (string.IsNullOrWhiteSpace(request.IpAddress))
         return Results.BadRequest("IP address required.");
 
-    var exists = await db.BannedIps.AnyAsync(b => b.IpAddress == request.IpAddress);
-    if (exists) return Results.Conflict("IP already banned.");
+    using var db = await dbFactory.CreateDbContextAsync();
+    var existing = await db.BannedIps.FirstOrDefaultAsync(b => b.IpAddress == request.IpAddress);
+    if (existing != null && existing.IsActive) return Results.Conflict("IP already banned.");
 
-    var ban = new BannedIp
+    if (existing != null)
     {
-        IpAddress = request.IpAddress,
-        Reason = request.Reason,
-        ExpiresAt = request.DurationHours.HasValue
-            ? DateTimeOffset.UtcNow.AddHours(request.DurationHours.Value)
-            : null // null = permanent
-    };
-    db.BannedIps.Add(ban);
+        existing.BanCount++;
+        existing.IsActive = true;
+        existing.Reason = request.Reason;
+        existing.BannedAt = DateTimeOffset.UtcNow;
+        existing.ExpiresAt = existing.BanCount switch
+        {
+            1 => DateTimeOffset.UtcNow.AddDays(1),
+            2 => DateTimeOffset.UtcNow.AddDays(7),
+            _ => DateTimeOffset.UtcNow.AddDays(30)
+        };
+    }
+    else
+    {
+        db.BannedIps.Add(new BannedIp
+        {
+            IpAddress = request.IpAddress,
+            Reason = request.Reason,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1)
+        });
+    }
     await db.SaveChangesAsync();
     await SyncBanFile(db);
 
-    return Results.Ok(new { banned = ban.IpAddress, ban.Reason, ban.BannedAt });
+    return Results.Ok(new { banned = request.IpAddress, request.Reason });
 }).WithName("BanIp");
 
-app.MapDelete("/api/security/ban/{ip}", async (string ip, [FromServices] AppDbContext db) =>
+app.MapDelete("/api/security/ban/{ip}", async (string ip, [FromServices] IDbContextFactory<AppDbContext> dbFactory) =>
 {
-    var ban = await db.BannedIps.FirstOrDefaultAsync(b => b.IpAddress == ip);
+    using var db = await dbFactory.CreateDbContextAsync();
+    var ban = await db.BannedIps.FirstOrDefaultAsync(b => b.IpAddress == ip && b.IsActive);
     if (ban == null) return Results.NotFound();
 
-    db.BannedIps.Remove(ban);
+    ban.IsActive = false;
     await db.SaveChangesAsync();
     await SyncBanFile(db);
 

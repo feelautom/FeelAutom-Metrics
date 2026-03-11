@@ -51,7 +51,19 @@
             <option value="100">100 / page</option>
             <option value="200">200 / page</option>
         </select>
-        <span class="text-muted small ms-auto">@totalLogs.ToString("N0") logs au total</span>
+        <div class="input-group input-group-sm ms-auto" style="width: 280px;">
+            <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary"
+                   placeholder="IP, path, navigateur..."
+                   @bind="searchQuery" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
+            @if (!string.IsNullOrEmpty(searchQuery))
+            {
+                <button class="btn btn-outline-secondary btn-sm" @onclick="ClearSearch">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            }
+        </div>
+        <span class="text-muted small">@totalLogs.ToString("N0") logs</span>
     </div>
 
     @if (logs == null)
@@ -76,15 +88,23 @@
                         <th>Localisation</th>
                         <th>Navigateur</th>
                         <th>Durée (ms)</th>
+                        <th class="text-end">Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var log in logs)
                     {
-                        <tr class="align-middle">
+                        var isBanned = bannedSet.Contains(log.ClientHost);
+                        <tr class="align-middle @(log.IsSuspicious ? "table-danger bg-opacity-10" : "") @(isBanned ? "opacity-50" : "")">
                             <td class="small text-muted">@log.Timestamp.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
                             <td><span class="badge bg-secondary opacity-75">@log.RequestHost</span></td>
-                            <td class="text-light small font-monospace">@log.ClientHost</td>
+                            <td class="text-light small font-monospace">
+                                @log.ClientHost
+                                @if (isBanned)
+                                {
+                                    <span class="badge bg-info ms-1">banni</span>
+                                }
+                            </td>
                             <td class="text-truncate" style="max-width: 300px;">
                                 <span class="text-info me-2 fw-bold">@log.RequestMethod</span>
                                 <span class="text-white-50 small">@log.RequestPath</span>
@@ -111,6 +131,14 @@
                                 @log.BrowserName
                             </td>
                             <td class="text-end fw-bold text-info">@log.DurationMs<small class="text-muted ms-1">ms</small></td>
+                            <td class="text-end">
+                                @if (!isBanned)
+                                {
+                                    <button class="btn btn-outline-danger btn-sm py-0 px-1" title="Bannir cette IP" @onclick="() => BanIp(log.ClientHost)">
+                                        <i class="bi bi-slash-circle"></i>
+                                    </button>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -147,6 +175,17 @@
     }
 </div>
 
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+        <div class="toast show bg-dark border-danger text-white shadow-lg">
+            <div class="toast-body">
+                <i class="bi bi-slash-circle me-2"></i>@statusMessage
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<GlobalAccessLog>? logs;
     private string ingestorBaseUrl = "";
@@ -163,7 +202,10 @@
     private List<string> availableDomains = new();
     private string filterDomain = "";
     private string filterStatus = "";
+    private string searchQuery = "";
     private List<string> excludedIps = new();
+    private HashSet<string> bannedSet = new();
+    private string? statusMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -201,6 +243,20 @@
             _ => query
         };
 
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var q = searchQuery.Trim();
+            query = query.Where(l =>
+                l.ClientHost.Contains(q) ||
+                l.RequestPath.Contains(q) ||
+                l.RequestHost.Contains(q) ||
+                (l.BrowserName != null && l.BrowserName.Contains(q)) ||
+                (l.CountryName != null && l.CountryName.Contains(q)) ||
+                (l.CountryCode != null && l.CountryCode.Contains(q)) ||
+                (l.BotCategory != null && l.BotCategory.Contains(q))
+            );
+        }
+
         return query;
     }
 
@@ -208,6 +264,7 @@
     {
         using var context = await DbFactory.CreateDbContextAsync();
         excludedIps = await context.ExcludedIps.Select(e => e.IpAddress).ToListAsync();
+        bannedSet = (await context.BannedIps.Where(b => b.IsActive).Select(b => b.IpAddress).ToListAsync()).ToHashSet();
         var query = ApplyFilters(context);
 
         totalLogs = await query.CountAsync();
@@ -251,6 +308,65 @@
         var from = DateTime.UtcNow.AddDays(-30).ToString("yyyy-MM-dd");
         var to = DateTime.UtcNow.ToString("yyyy-MM-dd");
         return $"{ingestorBaseUrl}/api/export/{type}?format={format}&from={from}&to={to}";
+    }
+
+    private async Task OnSearchKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { currentPage = 1; await RefreshLogs(); }
+    }
+
+    private async Task ClearSearch()
+    {
+        searchQuery = "";
+        currentPage = 1;
+        await RefreshLogs();
+    }
+
+    private async Task BanIp(string ip)
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        var existing = await context.BannedIps.FirstOrDefaultAsync(b => b.IpAddress == ip);
+
+        if (existing != null && existing.IsActive)
+        {
+            statusMessage = $"{ip} est déjà banni.";
+            StateHasChanged();
+            await Task.Delay(2000);
+            statusMessage = null;
+            StateHasChanged();
+            return;
+        }
+
+        if (existing != null)
+        {
+            existing.BanCount++;
+            existing.IsActive = true;
+            existing.Reason = "Banni depuis Flux Logs";
+            existing.BannedAt = DateTimeOffset.UtcNow;
+            existing.ExpiresAt = existing.BanCount switch
+            {
+                1 => DateTimeOffset.UtcNow.AddDays(1),
+                2 => DateTimeOffset.UtcNow.AddDays(7),
+                _ => DateTimeOffset.UtcNow.AddDays(30)
+            };
+        }
+        else
+        {
+            context.BannedIps.Add(new BannedIp
+            {
+                IpAddress = ip,
+                Reason = "Banni depuis Flux Logs",
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(1)
+            });
+        }
+
+        await context.SaveChangesAsync();
+        await RefreshLogs();
+        statusMessage = $"{ip} banni (24h).";
+        StateHasChanged();
+        await Task.Delay(2000);
+        statusMessage = null;
+        StateHasChanged();
     }
 
     private string GetStatusClass(int status) => status switch

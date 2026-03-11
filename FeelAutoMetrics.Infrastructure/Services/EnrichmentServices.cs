@@ -26,7 +26,9 @@ public class UserAgentService : IUserAgentService
     private static readonly string[] GoodBotPatterns =
     [
         "Googlebot", "Bingbot", "Applebot", "DuckDuckBot", "Slurp",
-        "facebookexternalhit", "LinkedInBot", "Twitterbot"
+        "facebookexternalhit", "LinkedInBot", "Twitterbot",
+        "Amazonbot", "YandexBot", "Baiduspider", "SemrushBot",
+        "AhrefsBot", "MJ12bot", "PetalBot", "Bytespider"
     ];
 
     public UserAgentService()

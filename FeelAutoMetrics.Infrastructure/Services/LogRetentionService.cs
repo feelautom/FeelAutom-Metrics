@@ -47,7 +47,8 @@ public class LogRetentionService : BackgroundService
     private async Task PurgeOldLogs(CancellationToken cancellationToken)
     {
         using var scope = _scopeFactory.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
+        using var context = await factory.CreateDbContextAsync(cancellationToken);
 
         var cutoff = DateTimeOffset.UtcNow.AddDays(-_retentionDays);
 

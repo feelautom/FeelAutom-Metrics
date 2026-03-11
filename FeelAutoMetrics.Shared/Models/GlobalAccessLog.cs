@@ -41,4 +41,6 @@ public class GlobalAccessLog
     public string? DeviceFamily { get; set; }
     public bool IsBot { get; set; }
     public string? BotCategory { get; set; }
+    public bool IsSuspicious { get; set; }
+    public string? ThreatType { get; set; }
 }

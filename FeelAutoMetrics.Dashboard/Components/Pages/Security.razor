@@ -41,7 +41,7 @@
                 <div class="card bg-dark border-warning text-white shadow">
                     <div class="card-body">
                         <h6 class="card-title text-uppercase small text-muted">Tentatives d'Intrusion</h6>
-                        <h2 class="mb-0">@threats.Count()</h2>
+                        <h2 class="mb-0">@totalThreats.ToString("N0")</h2>
                     </div>
                 </div>
             </div>
@@ -68,9 +68,10 @@
                             <thead>
                                 <tr>
                                     <th>Adresse IP</th>
+                                    <th>Récidive</th>
                                     <th>Raison</th>
                                     <th>Durée</th>
-                                    <th>Date de Ban</th>
+                                    <th>Expire le</th>
                                     <th class="text-end">Action</th>
                                 </tr>
                             </thead>
@@ -79,7 +80,12 @@
                                 {
                                     <tr class="align-middle">
                                         <td class="font-monospace text-danger fw-bold">@ban.IpAddress</td>
-                                        <td class="text-muted">@(ban.Reason ?? "-")</td>
+                                        <td>
+                                            <span class="badge @(ban.BanCount >= 3 ? "bg-danger" : ban.BanCount >= 2 ? "bg-warning text-dark" : "bg-secondary")">
+                                                x@ban.BanCount
+                                            </span>
+                                        </td>
+                                        <td class="text-muted small" style="max-width: 250px;">@(ban.Reason ?? "-")</td>
                                         <td>
                                             @if (ban.ExpiresAt == null)
                                             {
@@ -87,11 +93,21 @@
                                             }
                                             else
                                             {
-                                                var remaining = ban.ExpiresAt.Value - DateTimeOffset.UtcNow;
-                                                <span class="badge bg-warning text-dark">@($"{remaining.Hours}h{remaining.Minutes:D2} restantes")</span>
+                                                var days = (ban.ExpiresAt.Value - ban.BannedAt).TotalDays;
+                                                var label = days <= 1 ? "24h" : days <= 7 ? "7j" : "30j";
+                                                <span class="badge bg-warning text-dark">@label</span>
                                             }
                                         </td>
-                                        <td class="small text-muted">@ban.BannedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td class="small text-muted">
+                                            @if (ban.ExpiresAt != null)
+                                            {
+                                                @ban.ExpiresAt.Value.LocalDateTime.ToString("dd/MM à HH:mm")
+                                            }
+                                            else
+                                            {
+                                                <span>-</span>
+                                            }
+                                        </td>
                                         <td class="text-end">
                                             <button class="btn btn-outline-success btn-sm" @onclick="() => UnbanIp(ban.IpAddress)">
                                                 <i class="bi bi-unlock-fill me-1"></i>Débannir
@@ -122,6 +138,7 @@
                                     <th>Date</th>
                                     <th>Cible (Domaine)</th>
                                     <th>Attaquant (IP)</th>
+                                    <th>Type</th>
                                     <th>Requête Suspecte</th>
                                     <th>Origine</th>
                                     <th class="text-end">Action</th>
@@ -140,6 +157,9 @@
                                             {
                                                 <span class="badge bg-info ms-2">banni</span>
                                             }
+                                        </td>
+                                        <td>
+                                            <span class="badge @GetThreatBadgeClass(t.ThreatType)">@(t.ThreatType ?? "ThreatBot")</span>
                                         </td>
                                         <td class="text-truncate" style="max-width: 300px;">
                                             <code class="text-warning bg-transparent p-0">@t.RequestPath</code>
@@ -246,7 +266,7 @@
             baseQuery = baseQuery.Where(l => !excludedIps.Contains(l.ClientHost));
 
         var query = baseQuery
-            .Where(l => l.IsBot && l.BotCategory == "ThreatScanner");
+            .Where(l => l.IsSuspicious);
 
         totalThreats = await query.CountAsync();
 
@@ -256,17 +276,18 @@
             .Take(pageSize)
             .ToListAsync();
 
-        // Nettoyer les bans expirés
+        // Désactiver les bans expirés
         var expired = await context.BannedIps
-            .Where(b => b.ExpiresAt != null && b.ExpiresAt < DateTimeOffset.UtcNow)
+            .Where(b => b.IsActive && b.ExpiresAt != null && b.ExpiresAt < DateTimeOffset.UtcNow)
             .ToListAsync();
         if (expired.Any())
         {
-            context.BannedIps.RemoveRange(expired);
+            foreach (var b in expired) b.IsActive = false;
             await context.SaveChangesAsync();
         }
 
         bannedIps = await context.BannedIps
+            .Where(b => b.IsActive)
             .OrderByDescending(b => b.BannedAt)
             .ToListAsync();
 
@@ -276,29 +297,50 @@
     private async Task BanIp(string ip, string? path)
     {
         using var context = await DbFactory.CreateDbContextAsync();
-        if (await context.BannedIps.AnyAsync(b => b.IpAddress == ip))
+        var existing = await context.BannedIps.FirstOrDefaultAsync(b => b.IpAddress == ip);
+
+        if (existing != null && existing.IsActive)
         {
             await ShowStatus($"{ip} est déjà banni.", "warning", "bi-exclamation-triangle-fill");
             return;
         }
 
-        context.BannedIps.Add(new BannedIp
+        if (existing != null)
         {
-            IpAddress = ip,
-            Reason = $"Threat: {path}"
-        });
+            // Récidive
+            existing.BanCount++;
+            existing.IsActive = true;
+            existing.Reason = $"Manuel: {path}";
+            existing.BannedAt = DateTimeOffset.UtcNow;
+            existing.ExpiresAt = existing.BanCount switch
+            {
+                1 => DateTimeOffset.UtcNow.AddDays(1),
+                2 => DateTimeOffset.UtcNow.AddDays(7),
+                _ => DateTimeOffset.UtcNow.AddDays(30)
+            };
+        }
+        else
+        {
+            context.BannedIps.Add(new BannedIp
+            {
+                IpAddress = ip,
+                Reason = $"Manuel: {path}",
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(1)
+            });
+        }
+
         await context.SaveChangesAsync();
         await LoadData();
-        await ShowStatus($"{ip} a été banni.", "danger", "bi-slash-circle");
+        await ShowStatus($"{ip} banni (24h).", "danger", "bi-slash-circle");
     }
 
     private async Task UnbanIp(string ip)
     {
         using var context = await DbFactory.CreateDbContextAsync();
-        var ban = await context.BannedIps.FirstOrDefaultAsync(b => b.IpAddress == ip);
+        var ban = await context.BannedIps.FirstOrDefaultAsync(b => b.IpAddress == ip && b.IsActive);
         if (ban != null)
         {
-            context.BannedIps.Remove(ban);
+            ban.IsActive = false;
             await context.SaveChangesAsync();
         }
         await LoadData();
@@ -315,6 +357,18 @@
         statusMessage = null;
         StateHasChanged();
     }
+
+    private static string GetThreatBadgeClass(string? type) => type switch
+    {
+        "DirectIpScan" => "bg-danger",
+        "PathScan" => "bg-warning text-dark",
+        "SuspiciousExtension" => "bg-warning text-dark",
+        "PathTraversal" => "bg-danger",
+        "SQLInjection" => "bg-danger",
+        "XSS" => "bg-danger",
+        "ThreatBot" => "bg-info",
+        _ => "bg-secondary"
+    };
 
     private async Task GoToPage(int page) { currentPage = page; await LoadData(); }
     private async Task FirstPage() { currentPage = 1; await LoadData(); }

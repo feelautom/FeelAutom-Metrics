@@ -8,7 +8,7 @@ public class BannedIp
     public string IpAddress { get; set; } = string.Empty;
     public string? Reason { get; set; }
     public DateTimeOffset BannedAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset? ExpiresAt { get; set; } // null = permanent
-
-    public bool IsExpired => ExpiresAt.HasValue && ExpiresAt.Value < DateTimeOffset.UtcNow;
+    public DateTimeOffset? ExpiresAt { get; set; }
+    public int BanCount { get; set; } = 1;
+    public bool IsActive { get; set; } = true;
 }
