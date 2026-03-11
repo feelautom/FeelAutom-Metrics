@@ -1,0 +1,11 @@
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\bin\Debug\net9.0\FeelAutoMetrics.Shared.deps.json
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\bin\Debug\net9.0\FeelAutoMetrics.Shared.dll
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\bin\Debug\net9.0\FeelAutoMetrics.Shared.pdb
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\obj\Debug\net9.0\FeelAutoMetrics.Shared.GeneratedMSBuildEditorConfig.editorconfig
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\obj\Debug\net9.0\FeelAutoMetrics.Shared.AssemblyInfoInputs.cache
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\obj\Debug\net9.0\FeelAutoMetrics.Shared.AssemblyInfo.cs
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\obj\Debug\net9.0\FeelAutoMetrics.Shared.csproj.CoreCompileInputs.cache
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\obj\Debug\net9.0\FeelAutoMetrics.Shared.dll
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\obj\Debug\net9.0\refint\FeelAutoMetrics.Shared.dll
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\obj\Debug\net9.0\FeelAutoMetrics.Shared.pdb
+D:\Works\observability.feelautom.fr\FeelAutoMetrics.Shared\obj\Debug\net9.0\ref\FeelAutoMetrics.Shared.dll

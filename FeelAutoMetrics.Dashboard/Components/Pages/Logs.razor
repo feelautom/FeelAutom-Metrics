@@ -1,0 +1,105 @@
+@page "/logs"
+@using FeelAutoMetrics.Infrastructure.Data
+@using FeelAutoMetrics.Shared.Models
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@rendermode InteractiveServer
+
+<PageTitle>FeelAuto-Metrics | Flux Direct</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 text-white">Flux Global des Logs</h1>
+        <button class="btn btn-outline-primary" @onclick="RefreshLogs">Actualiser</button>
+    </div>
+
+    @if (logs == null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Chargement...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive bg-dark rounded shadow">
+            <table class="table table-dark table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Domaine</th>
+                        <th>Client IP</th>
+                        <th>Méthode / Path</th>
+                        <th>Statut</th>
+                        <th>Localisation</th>
+                        <th>Navigateur</th>
+                        <th>Durée (ms)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var log in logs)
+                    {
+                        <tr>
+                            <td class="small text-muted">@log.Timestamp.LocalDateTime.ToString("HH:mm:ss")</td>
+                            <td><span class="badge bg-secondary">@log.RequestHost</span></td>
+                            <td>@log.ClientHost</td>
+                            <td class="text-truncate" style="max-width: 300px;">
+                                <span class="text-info me-2">@log.RequestMethod</span>
+                                <span>@log.RequestPath</span>
+                            </td>
+                            <td>
+                                <span class="badge @GetStatusClass(log.ResponseStatusCode)">@log.ResponseStatusCode</span>
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(log.CountryCode))
+                                {
+                                    <span>@log.CountryCode - @log.CityName</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted small">-</span>
+                                }
+                            </td>
+                            <td class="small">
+                                @if (log.IsBot)
+                                {
+                                    <span class="badge bg-warning text-dark">Bot</span>
+                                }
+                                @log.BrowserName @log.BrowserVersion
+                            </td>
+                            <td class="text-end">@log.DurationMs</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<GlobalAccessLog>? logs;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshLogs();
+    }
+
+    private async Task RefreshLogs()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        logs = await context.GlobalAccessLogs
+            .OrderByDescending(l => l.Timestamp)
+            .Take(50)
+            .ToListAsync();
+    }
+
+    private string GetStatusClass(int status) => status switch
+    {
+        >= 200 and < 300 => "bg-success",
+        >= 300 and < 400 => "bg-info",
+        >= 400 and < 500 => "bg-warning",
+        >= 500 => "bg-danger",
+        _ => "bg-secondary"
+    };
+}
