@@ -40,14 +40,13 @@ public class SecurityService : ISecurityService
         "/.vscode", "/.idea", "/.DS_Store",
         // API probing
         "/actuator", "/debug", "/trace", "/swagger",
-        // Common vuln paths
-        "/vendor", "/node_modules", "/backup", "/dump",
+        // Common vuln paths (pas /vendor seul, trop de FP avec assets bundlés)
+        "/vendor/autoload", "/node_modules", "/backup", "/dump",
         "/telescope", "/horizon", "/elfinder", "/filemanager",
         "/solr", "/jenkins", "/struts", "/console",
         // Log4Shell, Spring4Shell
         "/${jndi", "/spring",
-        // Upload probing
-        "/api/upload", "/api/uploads", "/upload", "/uploads",
+        // Upload probing (paths exacts, pas /uploads/fichier.ext qui est légitime sur un CMS)
         "/fileupload", "/file-upload", "/uploadfile",
         "/api/storage", "/api/blob", "/api/media",
         // REST settings probing

@@ -122,6 +122,34 @@
             </div>
         }
 
+        <!-- Search -->
+        <div class="card bg-dark border-secondary text-white shadow mb-4">
+            <div class="card-body py-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text bg-black border-secondary text-muted"><i class="bi bi-search"></i></span>
+                            <input type="text" class="form-control bg-black border-secondary text-white"
+                                   placeholder="Rechercher par IP, domaine, path, type de menace..."
+                                   @bind="searchTerm" @bind:event="oninput"
+                                   @onkeydown="HandleSearchKeyDown" />
+                            @if (!string.IsNullOrEmpty(searchTerm))
+                            {
+                                <button class="btn btn-outline-secondary" @onclick="ClearSearch">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-danger w-100" @onclick="DoSearch">
+                            <i class="bi bi-search me-1"></i>Rechercher
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Threats Table -->
         @if (totalThreats > 0)
         {
@@ -237,6 +265,7 @@
     private string? statusMessage;
     private string statusClass = "success";
     private string statusIcon = "bi-check-circle-fill";
+    private string searchTerm = "";
 
     // Pagination
     private int currentPage = 1;
@@ -267,6 +296,17 @@
 
         var query = baseQuery
             .Where(l => l.IsSuspicious);
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim();
+            query = query.Where(l =>
+                l.ClientHost.Contains(term) ||
+                l.RequestHost.Contains(term) ||
+                l.RequestPath.Contains(term) ||
+                (l.ThreatType != null && l.ThreatType.Contains(term)) ||
+                (l.CountryName != null && l.CountryName.Contains(term)));
+        }
 
         totalThreats = await query.CountAsync();
 
@@ -366,9 +406,17 @@
         "PathTraversal" => "bg-danger",
         "SQLInjection" => "bg-danger",
         "XSS" => "bg-danger",
+        "Error500Burst" => "bg-danger",
         "ThreatBot" => "bg-info",
         _ => "bg-secondary"
     };
+
+    private async Task DoSearch() { currentPage = 1; await LoadData(); }
+    private async Task ClearSearch() { searchTerm = ""; currentPage = 1; await LoadData(); }
+    private async Task HandleSearchKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await DoSearch();
+    }
 
     private async Task GoToPage(int page) { currentPage = page; await LoadData(); }
     private async Task FirstPage() { currentPage = 1; await LoadData(); }
