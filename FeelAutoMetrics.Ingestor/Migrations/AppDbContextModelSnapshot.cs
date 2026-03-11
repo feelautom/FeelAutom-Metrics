@@ -23,6 +23,38 @@ namespace FeelAutoMetrics.Ingestor.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("FeelAutoMetrics.Shared.Models.AiAnalysis", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ActionsTaken")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("AnalyzedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("LogsAnalyzed")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("LogsFromTimestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("LogsToTimestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnalyzedAt");
+
+                    b.ToTable("AiAnalyses");
+                });
+
             modelBuilder.Entity("FeelAutoMetrics.Shared.Models.AppEvent", b =>
                 {
                     b.Property<Guid>("Id")

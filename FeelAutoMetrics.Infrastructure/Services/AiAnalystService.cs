@@ -382,17 +382,6 @@ public class AiAnalystService : BackgroundService
         }
 
         await db.SaveChangesAsync();
-
-        // Sync fichier pour iptables
-        try
-        {
-            const string banFilePath = "/app/Security/banned-ips.txt";
-            var ips = await db.BannedIps.Where(b => b.IsActive).Select(b => b.IpAddress).ToListAsync();
-            var dir = Path.GetDirectoryName(banFilePath);
-            if (dir != null) Directory.CreateDirectory(dir);
-            await File.WriteAllLinesAsync(banFilePath, ips);
-        }
-        catch { /* Best effort */ }
     }
 
     private record AiAction(string Ip, string Action, string Reason);

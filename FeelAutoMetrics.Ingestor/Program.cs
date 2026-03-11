@@ -213,12 +213,10 @@ app.MapGet("/api/export/events", async (
 
 // === Security: Banned IPs ===
 
-const string BanFilePath = "/app/Security/banned-ips.txt";
-
-// Nettoie les bans expirés et écrit la liste active dans un fichier pour sync iptables
-async Task SyncBanFile(AppDbContext db)
+// Nettoie les bans expirés au démarrage
 {
-    // Désactiver les bans expirés
+    var factory = app.Services.GetRequiredService<IDbContextFactory<AppDbContext>>();
+    using var db = await factory.CreateDbContextAsync();
     var expired = await db.BannedIps
         .Where(b => b.IsActive && b.ExpiresAt != null && b.ExpiresAt < DateTimeOffset.UtcNow)
         .ToListAsync();
@@ -227,18 +225,6 @@ async Task SyncBanFile(AppDbContext db)
         foreach (var b in expired) b.IsActive = false;
         await db.SaveChangesAsync();
     }
-
-    var ips = await db.BannedIps.Where(b => b.IsActive).Select(b => b.IpAddress).ToListAsync();
-    var dir = Path.GetDirectoryName(BanFilePath);
-    if (dir != null) Directory.CreateDirectory(dir);
-    await File.WriteAllLinesAsync(BanFilePath, ips);
-}
-
-// Init: sync le fichier au démarrage
-{
-    var factory = app.Services.GetRequiredService<IDbContextFactory<AppDbContext>>();
-    using var db = await factory.CreateDbContextAsync();
-    await SyncBanFile(db);
 }
 
 app.MapGet("/api/ai/status", ([FromServices] IConfiguration config) =>
@@ -287,7 +273,6 @@ app.MapPost("/api/security/ban", async ([FromBody] BanRequest request, [FromServ
         });
     }
     await db.SaveChangesAsync();
-    await SyncBanFile(db);
 
     return Results.Ok(new { banned = request.IpAddress, request.Reason });
 }).WithName("BanIp");
@@ -300,7 +285,6 @@ app.MapDelete("/api/security/ban/{ip}", async (string ip, [FromServices] IDbCont
 
     ban.IsActive = false;
     await db.SaveChangesAsync();
-    await SyncBanFile(db);
 
     return Results.Ok(new { unbanned = ip });
 }).WithName("UnbanIp");
