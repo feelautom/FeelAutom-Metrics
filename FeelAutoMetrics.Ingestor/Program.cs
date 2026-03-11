@@ -132,7 +132,7 @@ app.MapGet("/api/export/logs", async (
     if (DateTimeOffset.TryParseExact(to, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var toDate))
         query = query.Where(l => l.Timestamp <= toDate.AddDays(1));
 
-    var logs = await query.OrderByDescending(l => l.Timestamp).Take(10000).ToListAsync();
+    var logs = await query.OrderByDescending(l => l.Timestamp).Take(50000).ToListAsync();
 
     if (fmt == "csv")
     {
@@ -165,7 +165,7 @@ app.MapGet("/api/export/events", async (
     if (DateTimeOffset.TryParseExact(to, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var toDate))
         query = query.Where(e => e.Timestamp <= toDate.AddDays(1));
 
-    var events = await query.OrderByDescending(e => e.Timestamp).Take(10000).ToListAsync();
+    var events = await query.OrderByDescending(e => e.Timestamp).Take(50000).ToListAsync();
 
     if (fmt == "csv")
     {

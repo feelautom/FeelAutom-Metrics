@@ -107,11 +107,12 @@
         }
 
         <!-- Threats Table -->
-        @if (threats.Any())
+        @if (totalThreats > 0)
         {
             <div class="card bg-dark border-danger text-white shadow">
-                <div class="card-header bg-transparent border-secondary py-3">
-                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>Dernières Menaces Détectées</h5>
+                <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>Menaces Détectées</h5>
+                    <span class="text-muted small">@totalThreats.ToString("N0") menaces au total</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -159,6 +160,34 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Pagination -->
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <div class="text-muted small">
+                    Page @currentPage / @totalPages — Affichage @((currentPage - 1) * pageSize + 1)-@Math.Min(currentPage * pageSize, totalThreats) sur @totalThreats.ToString("N0")
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage <= 1)" @onclick="FirstPage">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage <= 1)" @onclick="PrevPage">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    @for (int i = startPage; i <= endPage; i++)
+                    {
+                        var p = i;
+                        <button class="btn btn-sm @(p == currentPage ? "btn-danger" : "btn-outline-secondary")" @onclick="() => GoToPage(p)">
+                            @p
+                        </button>
+                    }
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage >= totalPages)" @onclick="NextPage">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage >= totalPages)" @onclick="LastPage">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </button>
+                </div>
+            </div>
         }
         else
         {
@@ -189,6 +218,14 @@
     private string statusClass = "success";
     private string statusIcon = "bi-check-circle-fill";
 
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 100;
+    private int totalThreats;
+    private int totalPages => (int)Math.Ceiling((double)totalThreats / pageSize);
+    private int startPage => Math.Max(1, currentPage - 2);
+    private int endPage => Math.Min(totalPages, startPage + 4);
+
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
@@ -202,10 +239,21 @@
     private async Task LoadData()
     {
         using var context = await DbFactory.CreateDbContextAsync();
-        threats = await context.GlobalAccessLogs
-            .Where(l => l.IsBot && l.BotCategory == "ThreatScanner")
+
+        var excludedIps = await context.ExcludedIps.Select(e => e.IpAddress).ToListAsync();
+        IQueryable<GlobalAccessLog> baseQuery = context.GlobalAccessLogs;
+        if (excludedIps.Any())
+            baseQuery = baseQuery.Where(l => !excludedIps.Contains(l.ClientHost));
+
+        var query = baseQuery
+            .Where(l => l.IsBot && l.BotCategory == "ThreatScanner");
+
+        totalThreats = await query.CountAsync();
+
+        threats = await query
             .OrderByDescending(l => l.Timestamp)
-            .Take(100)
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         // Nettoyer les bans expirés
@@ -267,6 +315,12 @@
         statusMessage = null;
         StateHasChanged();
     }
+
+    private async Task GoToPage(int page) { currentPage = page; await LoadData(); }
+    private async Task FirstPage() { currentPage = 1; await LoadData(); }
+    private async Task PrevPage() { if (currentPage > 1) { currentPage--; await LoadData(); } }
+    private async Task NextPage() { if (currentPage < totalPages) { currentPage++; await LoadData(); } }
+    private async Task LastPage() { currentPage = totalPages; await LoadData(); }
 
     public void Dispose()
     {

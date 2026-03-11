@@ -414,6 +414,7 @@
     // Domain filter
     private List<string> availableDomains = new();
     private string selectedDomain = "";
+    private List<string> excludedIps = new();
 
     // Top lists
     private List<KeyValuePair<string, int>> topPages = new();
@@ -448,7 +449,11 @@
     {
         using var context = await DbFactory.CreateDbContextAsync();
 
+        excludedIps = await context.ExcludedIps.Select(e => e.IpAddress).ToListAsync();
+
         IQueryable<GlobalAccessLog> query = context.GlobalAccessLogs;
+        if (excludedIps.Any())
+            query = query.Where(l => !excludedIps.Contains(l.ClientHost));
         if (!string.IsNullOrEmpty(selectedDomain))
         {
             query = query.Where(l => l.RequestHost == selectedDomain);

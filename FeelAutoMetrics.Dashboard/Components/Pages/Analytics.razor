@@ -122,7 +122,12 @@
     {
         using var context = await DbFactory.CreateDbContextAsync();
 
-        var rawStats = await context.GlobalAccessLogs
+        var excludedIps = await context.ExcludedIps.Select(e => e.IpAddress).ToListAsync();
+        IQueryable<GlobalAccessLog> baseQuery = context.GlobalAccessLogs;
+        if (excludedIps.Any())
+            baseQuery = baseQuery.Where(l => !excludedIps.Contains(l.ClientHost));
+
+        var rawStats = await baseQuery
             .GroupBy(l => l.RequestHost)
             .Select(g => new
             {

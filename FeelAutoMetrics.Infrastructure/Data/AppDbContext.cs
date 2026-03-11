@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<GlobalAccessLog> GlobalAccessLogs { get; set; }
     public DbSet<AppEvent> AppEvents { get; set; }
     public DbSet<BannedIp> BannedIps { get; set; }
+    public DbSet<ExcludedIp> ExcludedIps { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -38,6 +39,15 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.IpAddress).IsUnique();
             entity.Property(e => e.IpAddress).IsRequired().HasMaxLength(45);
+        });
+
+        // Configuration ExcludedIp
+        modelBuilder.Entity<ExcludedIp>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.IpAddress).IsUnique();
+            entity.Property(e => e.IpAddress).IsRequired().HasMaxLength(45);
+            entity.Property(e => e.Label).HasMaxLength(100);
         });
 
         // Configuration AppEvent

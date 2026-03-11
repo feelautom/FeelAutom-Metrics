@@ -11,21 +11,47 @@
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 text-white">Flux Global des Logs</h1>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 align-items-center">
             <a href="@GetExportUrl("logs", "csv")" target="_blank" class="btn btn-outline-success btn-sm">
-                <i class="bi bi-filetype-csv me-1"></i>Export CSV Logs
+                <i class="bi bi-filetype-csv me-1"></i>CSV
             </a>
             <a href="@GetExportUrl("logs", "json")" target="_blank" class="btn btn-outline-info btn-sm">
-                <i class="bi bi-filetype-json me-1"></i>Export JSON Logs
+                <i class="bi bi-filetype-json me-1"></i>JSON
             </a>
             <a href="@GetExportUrl("events", "csv")" target="_blank" class="btn btn-outline-success btn-sm">
-                <i class="bi bi-filetype-csv me-1"></i>Export CSV Events
+                <i class="bi bi-filetype-csv me-1"></i>Events CSV
             </a>
             <a href="@GetExportUrl("events", "json")" target="_blank" class="btn btn-outline-info btn-sm">
-                <i class="bi bi-filetype-json me-1"></i>Export JSON Events
+                <i class="bi bi-filetype-json me-1"></i>Events JSON
             </a>
-            <button class="btn btn-outline-primary btn-sm" @onclick="RefreshLogs">Actualiser</button>
         </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="d-flex gap-3 align-items-center mb-3">
+        <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 200px;"
+                @onchange="OnDomainChanged" value="@filterDomain">
+            <option value="">Tous les domaines</option>
+            @foreach (var d in availableDomains)
+            {
+                <option value="@d">@d</option>
+            }
+        </select>
+        <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 120px;"
+                @onchange="OnStatusChanged" value="@filterStatus">
+            <option value="">Tous statuts</option>
+            <option value="2xx">2xx OK</option>
+            <option value="3xx">3xx Redirect</option>
+            <option value="4xx">4xx Erreur</option>
+            <option value="5xx">5xx Serveur</option>
+        </select>
+        <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 130px;"
+                @onchange="OnPageSizeChanged" value="@pageSize">
+            <option value="50">50 / page</option>
+            <option value="100">100 / page</option>
+            <option value="200">200 / page</option>
+        </select>
+        <span class="text-muted small ms-auto">@totalLogs.ToString("N0") logs au total</span>
     </div>
 
     @if (logs == null)
@@ -56,9 +82,9 @@
                     @foreach (var log in logs)
                     {
                         <tr class="align-middle">
-                            <td class="small text-muted">@log.Timestamp.LocalDateTime.ToString("HH:mm:ss")</td>
+                            <td class="small text-muted">@log.Timestamp.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
                             <td><span class="badge bg-secondary opacity-75">@log.RequestHost</span></td>
-                            <td class="text-light small">@log.ClientHost</td>
+                            <td class="text-light small font-monospace">@log.ClientHost</td>
                             <td class="text-truncate" style="max-width: 300px;">
                                 <span class="text-info me-2 fw-bold">@log.RequestMethod</span>
                                 <span class="text-white-50 small">@log.RequestPath</span>
@@ -79,7 +105,8 @@
                             <td class="small text-light">
                                 @if (log.IsBot)
                                 {
-                                    <span class="badge bg-warning text-dark me-1">Bot</span>
+                                    var badgeClass = log.BotCategory == "GoodBot" ? "bg-success" : log.BotCategory == "ThreatScanner" ? "bg-danger" : "bg-warning text-dark";
+                                    <span class="badge @badgeClass me-1">@(log.BotCategory ?? "Bot")</span>
                                 }
                                 @log.BrowserName
                             </td>
@@ -89,6 +116,34 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Pagination -->
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="text-muted small">
+                Page @currentPage / @totalPages — Affichage @((currentPage - 1) * pageSize + 1)-@Math.Min(currentPage * pageSize, totalLogs) sur @totalLogs.ToString("N0")
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage <= 1)" @onclick="FirstPage">
+                    <i class="bi bi-chevron-double-left"></i>
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage <= 1)" @onclick="PrevPage">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                @for (int i = startPage; i <= endPage; i++)
+                {
+                    var p = i;
+                    <button class="btn btn-sm @(p == currentPage ? "btn-primary" : "btn-outline-secondary")" @onclick="() => GoToPage(p)">
+                        @p
+                    </button>
+                }
+                <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage >= totalPages)" @onclick="NextPage">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage >= totalPages)" @onclick="LastPage">
+                    <i class="bi bi-chevron-double-right"></i>
+                </button>
+            </div>
+        </div>
     }
 </div>
 
@@ -96,20 +151,100 @@
     private List<GlobalAccessLog>? logs;
     private string ingestorBaseUrl = "";
 
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 100;
+    private int totalLogs;
+    private int totalPages => (int)Math.Ceiling((double)totalLogs / pageSize);
+    private int startPage => Math.Max(1, currentPage - 2);
+    private int endPage => Math.Min(totalPages, startPage + 4);
+
+    // Filters
+    private List<string> availableDomains = new();
+    private string filterDomain = "";
+    private string filterStatus = "";
+    private List<string> excludedIps = new();
+
     protected override async Task OnInitializedAsync()
     {
         ingestorBaseUrl = Configuration["IngestorBaseUrl"] ?? "http://localhost:5001";
+        await LoadDomains();
         await RefreshLogs();
+    }
+
+    private async Task LoadDomains()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        availableDomains = await context.GlobalAccessLogs
+            .Select(l => l.RequestHost)
+            .Distinct()
+            .OrderBy(h => h)
+            .ToListAsync();
+    }
+
+    private IQueryable<GlobalAccessLog> ApplyFilters(AppDbContext context)
+    {
+        IQueryable<GlobalAccessLog> query = context.GlobalAccessLogs;
+
+        if (excludedIps.Any())
+            query = query.Where(l => !excludedIps.Contains(l.ClientHost));
+
+        if (!string.IsNullOrEmpty(filterDomain))
+            query = query.Where(l => l.RequestHost == filterDomain);
+
+        query = filterStatus switch
+        {
+            "2xx" => query.Where(l => l.ResponseStatusCode >= 200 && l.ResponseStatusCode < 300),
+            "3xx" => query.Where(l => l.ResponseStatusCode >= 300 && l.ResponseStatusCode < 400),
+            "4xx" => query.Where(l => l.ResponseStatusCode >= 400 && l.ResponseStatusCode < 500),
+            "5xx" => query.Where(l => l.ResponseStatusCode >= 500),
+            _ => query
+        };
+
+        return query;
     }
 
     private async Task RefreshLogs()
     {
         using var context = await DbFactory.CreateDbContextAsync();
-        logs = await context.GlobalAccessLogs
+        excludedIps = await context.ExcludedIps.Select(e => e.IpAddress).ToListAsync();
+        var query = ApplyFilters(context);
+
+        totalLogs = await query.CountAsync();
+
+        logs = await query
             .OrderByDescending(l => l.Timestamp)
-            .Take(50)
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
     }
+
+    private async Task OnDomainChanged(ChangeEventArgs e)
+    {
+        filterDomain = e.Value?.ToString() ?? "";
+        currentPage = 1;
+        await RefreshLogs();
+    }
+
+    private async Task OnStatusChanged(ChangeEventArgs e)
+    {
+        filterStatus = e.Value?.ToString() ?? "";
+        currentPage = 1;
+        await RefreshLogs();
+    }
+
+    private async Task OnPageSizeChanged(ChangeEventArgs e)
+    {
+        pageSize = int.Parse(e.Value?.ToString() ?? "100");
+        currentPage = 1;
+        await RefreshLogs();
+    }
+
+    private async Task GoToPage(int page) { currentPage = page; await RefreshLogs(); }
+    private async Task FirstPage() { currentPage = 1; await RefreshLogs(); }
+    private async Task PrevPage() { if (currentPage > 1) { currentPage--; await RefreshLogs(); } }
+    private async Task NextPage() { if (currentPage < totalPages) { currentPage++; await RefreshLogs(); } }
+    private async Task LastPage() { currentPage = totalPages; await RefreshLogs(); }
 
     private string GetExportUrl(string type, string format)
     {
