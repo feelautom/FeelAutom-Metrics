@@ -20,6 +20,7 @@ public class SecurityService : ISecurityService
     private readonly IConfiguration _config;
     private static readonly ConcurrentDictionary<string, (int Score, DateTimeOffset LastHit)> _threatScores = new();
     private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _error500Bursts = new();
+    private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _requestBursts = new();
     private const string BanFilePath = "/app/Security/banned-ips.txt";
 
     // Paths classiques de scan/intrusion
@@ -175,6 +176,26 @@ public class SecurityService : ISecurityService
         {
             threatType = "ThreatBot";
             points = 20;
+        }
+
+        // 10. Rafale de requêtes (scraping/crawling agressif — 30+ req en 10s)
+        {
+            var nowReq = DateTimeOffset.UtcNow;
+            var reqBurst = _requestBursts.AddOrUpdate(log.ClientHost,
+                (1, nowReq),
+                (_, old) =>
+                {
+                    if ((nowReq - old.WindowStart).TotalSeconds > 10)
+                        return (1, nowReq);
+                    return (old.Count + 1, old.WindowStart);
+                });
+
+            if (reqBurst.Count >= 30 && threatType == null)
+            {
+                threatType = "RequestBurst";
+                points = 50; // Ban après ~4 rafales (200pts)
+                _requestBursts.TryRemove(log.ClientHost, out _);
+            }
         }
 
         // Appliquer le flag IsSuspicious pour les détections directes (hors 404 simples)
