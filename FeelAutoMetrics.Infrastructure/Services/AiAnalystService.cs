@@ -19,7 +19,7 @@ public class AiAnalystService : BackgroundService
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _interval;
 
-    private const string GeminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+    private const string GeminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent";
 
     public AiAnalystService(IServiceProvider services, ILogger<AiAnalystService> logger, IConfiguration config)
     {
