@@ -3,6 +3,7 @@
 @using FeelAutoMetrics.Shared.Models
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject IConfiguration Configuration
 @rendermode InteractiveServer
 
 <PageTitle>FeelAuto-Metrics | Flux Direct</PageTitle>
@@ -10,7 +11,21 @@
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 text-white">Flux Global des Logs</h1>
-        <button class="btn btn-outline-primary" @onclick="RefreshLogs">Actualiser</button>
+        <div class="d-flex gap-2">
+            <a href="@GetExportUrl("logs", "csv")" target="_blank" class="btn btn-outline-success btn-sm">
+                <i class="bi bi-filetype-csv me-1"></i>Export CSV Logs
+            </a>
+            <a href="@GetExportUrl("logs", "json")" target="_blank" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-filetype-json me-1"></i>Export JSON Logs
+            </a>
+            <a href="@GetExportUrl("events", "csv")" target="_blank" class="btn btn-outline-success btn-sm">
+                <i class="bi bi-filetype-csv me-1"></i>Export CSV Events
+            </a>
+            <a href="@GetExportUrl("events", "json")" target="_blank" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-filetype-json me-1"></i>Export JSON Events
+            </a>
+            <button class="btn btn-outline-primary btn-sm" @onclick="RefreshLogs">Actualiser</button>
+        </div>
     </div>
 
     @if (logs == null)
@@ -79,9 +94,11 @@
 
 @code {
     private List<GlobalAccessLog>? logs;
+    private string ingestorBaseUrl = "";
 
     protected override async Task OnInitializedAsync()
     {
+        ingestorBaseUrl = Configuration["IngestorBaseUrl"] ?? "http://localhost:5001";
         await RefreshLogs();
     }
 
@@ -92,6 +109,13 @@
             .OrderByDescending(l => l.Timestamp)
             .Take(50)
             .ToListAsync();
+    }
+
+    private string GetExportUrl(string type, string format)
+    {
+        var from = DateTime.UtcNow.AddDays(-30).ToString("yyyy-MM-dd");
+        var to = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        return $"{ingestorBaseUrl}/api/export/{type}?format={format}&from={from}&to={to}";
     }
 
     private string GetStatusClass(int status) => status switch

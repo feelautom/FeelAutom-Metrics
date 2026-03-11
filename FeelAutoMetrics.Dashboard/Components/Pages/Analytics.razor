@@ -36,6 +36,7 @@
                         <th class="text-end">Latence Moy.</th>
                         <th class="text-end">Erreurs 4xx/5xx</th>
                         <th class="text-end">Bots</th>
+                        <th class="text-end">Volume</th>
                         <th class="text-end pe-4">Santé</th>
                     </tr>
                 </thead>
@@ -65,6 +66,9 @@
                             <td class="text-end">
                                 <span class="text-muted">@stat.BotRate.ToString("P1")</span>
                             </td>
+                            <td class="text-end">
+                                <span class="text-light">@FormatVolume(stat.TotalVolume)</span>
+                            </td>
                             <td class="text-end pe-4">
                                 @if (stat.ErrorRate < 0.1)
                                 {
@@ -90,6 +94,7 @@
                         <td class="text-end text-muted">@(domainStats.Any() ? domainStats.Average(s => s.AverageLatency).ToString("N0") : "0") <small>ms</small></td>
                         <td></td>
                         <td></td>
+                        <td class="text-end text-muted fw-bold">@FormatVolume(domainStats.Sum(s => s.TotalVolume))</td>
                         <td></td>
                     </tr>
                 </tfoot>
@@ -125,7 +130,8 @@
                 Count = g.Count(),
                 AvgLatency = g.Average(l => l.DurationMs),
                 Errors = g.Count(l => l.ResponseStatusCode >= 400),
-                Bots = g.Count(l => l.IsBot)
+                Bots = g.Count(l => l.IsBot),
+                Volume = g.Sum(l => l.ResponseContentSize)
             })
             .ToListAsync();
 
@@ -135,13 +141,25 @@
             TotalRequests = s.Count,
             AverageLatency = s.AvgLatency,
             ErrorRate = (double)s.Errors / s.Count,
-            BotRate = (double)s.Bots / s.Count
+            BotRate = (double)s.Bots / s.Count,
+            TotalVolume = s.Volume
         }).OrderByDescending(s => s.TotalRequests).ToList();
 
         maxRequests = domainStats.FirstOrDefault()?.TotalRequests ?? 1;
     }
 
     private double GetTrafficPercentage(int count) => (double)count / maxRequests * 100;
+
+    private static string FormatVolume(long bytes)
+    {
+        if (bytes >= 1_073_741_824)
+            return $"{(bytes / 1_073_741_824.0):N2} GB";
+        if (bytes >= 1_048_576)
+            return $"{(bytes / 1_048_576.0):N2} MB";
+        if (bytes >= 1024)
+            return $"{(bytes / 1024.0):N1} KB";
+        return $"{bytes} B";
+    }
 
     public void Dispose()
     {
@@ -155,5 +173,6 @@
         public double AverageLatency { get; set; }
         public double ErrorRate { get; set; }
         public double BotRate { get; set; }
+        public long TotalVolume { get; set; }
     }
 }

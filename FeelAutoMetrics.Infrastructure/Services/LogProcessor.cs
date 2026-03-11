@@ -51,13 +51,14 @@ public class LogProcessor : ILogProcessor
         log.Longitude = lon;
 
         // User-Agent Enrichment
-        var (browser, browserVersion, os, osVersion, device, isBot) = _userAgentService.Parse(log.UserAgentBrut);
+        var (browser, browserVersion, os, osVersion, device, isBot, botCategory) = _userAgentService.Parse(log.UserAgentBrut);
         log.BrowserName = browser;
         log.BrowserVersion = browserVersion;
         log.OsName = os;
         log.OsVersion = osVersion;
         log.DeviceFamily = device;
         log.IsBot = isBot;
+        log.BotCategory = botCategory;
 
         // Security Analysis
         await _securityService.AnalyzeLogAsync(log);

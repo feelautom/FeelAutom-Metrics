@@ -13,9 +13,19 @@
             <h1 class="h2 text-white fw-bold">Observabilité Globale</h1>
             <p class="text-muted mb-0">Surveillance en temps réel de votre infrastructure et applications.</p>
         </div>
-        <div class="text-end">
-            <span class="badge bg-success p-2 px-3">En Ligne</span>
-            <div class="small text-muted mt-1">Dernière synchro : @DateTime.Now.ToString("HH:mm:ss")</div>
+        <div class="d-flex align-items-center gap-3">
+            <select class="form-select form-select-sm bg-dark text-white border-secondary" style="min-width: 220px;"
+                    @onchange="OnDomainFilterChanged" value="@selectedDomain">
+                <option value="">Tous les sites</option>
+                @foreach (var domain in availableDomains)
+                {
+                    <option value="@domain">@domain</option>
+                }
+            </select>
+            <div class="text-end">
+                <span class="badge bg-success p-2 px-3">En Ligne</span>
+                <div class="small text-muted mt-1">Dernière synchro : @DateTime.Now.ToString("HH:mm:ss")</div>
+            </div>
         </div>
     </div>
 
@@ -90,7 +100,7 @@
                                 <tbody>
                                     @foreach (var ev in recentEvents)
                                     {
-                                        <tr>
+                                        <tr role="button" @onclick="() => SelectEvent(ev)" class="@(selectedEvent?.Id == ev.Id ? "table-active" : "")">
                                             <td><span class="badge bg-info">@ev.AppName</span></td>
                                             <td><span class="badge @GetLevelClass(ev.Level)">@ev.Level</span></td>
                                             <td class="text-truncate" style="max-width: 300px;">@ev.Message</td>
@@ -113,25 +123,279 @@
                 </div>
             </div>
 
-            <!-- Domains Breakdown -->
+            <!-- Event Detail / Domain Breakdown -->
+            <div class="col-lg-4">
+                @if (selectedEvent != null)
+                {
+                    <div class="card bg-dark text-white border-0 shadow h-100 border-start border-info border-3">
+                        <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Détail Événement</h5>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => selectedEvent = null">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <div class="text-muted small text-uppercase fw-bold mb-1">Application</div>
+                                <span class="badge bg-info">@selectedEvent.AppName</span>
+                                <span class="badge @GetLevelClass(selectedEvent.Level) ms-1">@selectedEvent.Level</span>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="text-muted small text-uppercase fw-bold mb-1">Message</div>
+                                <div class="text-white">@selectedEvent.Message</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="text-muted small text-uppercase fw-bold mb-1">Horodatage</div>
+                                <div class="text-light">@selectedEvent.Timestamp.LocalDateTime.ToString("dd/MM/yyyy HH:mm:ss")</div>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(selectedEvent.Category))
+                            {
+                                <div class="mb-3">
+                                    <div class="text-muted small text-uppercase fw-bold mb-1">Catégorie</div>
+                                    <span class="badge bg-secondary">@selectedEvent.Category</span>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(selectedEvent.CorrelationId))
+                            {
+                                <div class="mb-3">
+                                    <div class="text-muted small text-uppercase fw-bold mb-1">Correlation ID</div>
+                                    <code class="text-warning">@selectedEvent.CorrelationId</code>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(selectedEvent.UserId))
+                            {
+                                <div class="mb-3">
+                                    <div class="text-muted small text-uppercase fw-bold mb-1">Utilisateur</div>
+                                    <span class="text-light">@selectedEvent.UserId</span>
+                                </div>
+                            }
+
+                            <div class="mb-3">
+                                <div class="text-muted small text-uppercase fw-bold mb-1">Environnement</div>
+                                <span class="text-light">@selectedEvent.Environment</span>
+                            </div>
+
+                            @if (selectedEvent.Metadata != null && selectedEvent.Metadata.Any())
+                            {
+                                <div class="mb-3">
+                                    <div class="text-muted small text-uppercase fw-bold mb-1">Métadonnées</div>
+                                    @foreach (var kv in selectedEvent.Metadata)
+                                    {
+                                        <div class="d-flex justify-content-between border-bottom border-secondary py-1">
+                                            <span class="text-muted small">@kv.Key</span>
+                                            <span class="text-light small">@kv.Value</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(selectedEvent.ExceptionMessage))
+                            {
+                                <div class="mb-3">
+                                    <div class="text-muted small text-uppercase fw-bold mb-1">Exception</div>
+                                    <div class="text-danger small">@selectedEvent.ExceptionMessage</div>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(selectedEvent.StackTrace))
+                            {
+                                <div class="mb-3">
+                                    <div class="text-muted small text-uppercase fw-bold mb-1">Stack Trace</div>
+                                    <pre class="text-danger small bg-black p-2 rounded" style="max-height: 150px; overflow-y: auto; font-size: 0.7rem;">@selectedEvent.StackTrace</pre>
+                                </div>
+                            }
+
+                            <!-- Lien réseau Traefik -->
+                            @if (linkedLog != null)
+                            {
+                                <div class="mt-3 pt-3 border-top border-secondary">
+                                    <div class="text-muted small text-uppercase fw-bold mb-2">
+                                        <i class="bi bi-link-45deg me-1"></i>Requête Réseau Liée
+                                    </div>
+                                    <div class="bg-black rounded p-3">
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="text-muted small">IP Client</span>
+                                            <span class="text-light font-monospace small">@linkedLog.ClientHost</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="text-muted small">Pays</span>
+                                            <span class="text-light small">@(linkedLog.CountryName ?? "-") @(linkedLog.CityName != null ? $"({linkedLog.CityName})" : "")</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="text-muted small">Navigateur</span>
+                                            <span class="text-light small">@(linkedLog.BrowserName ?? "-") @linkedLog.BrowserVersion</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="text-muted small">OS</span>
+                                            <span class="text-light small">@(linkedLog.OsName ?? "-")</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="text-muted small">Requête</span>
+                                            <span class="text-info small">@linkedLog.RequestMethod @linkedLog.RequestPath</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span class="text-muted small">Statut / Durée</span>
+                                            <span>
+                                                <span class="badge @GetStatusClass(linkedLog.ResponseStatusCode) me-1">@linkedLog.ResponseStatusCode</span>
+                                                <span class="text-info small">@linkedLog.DurationMs ms</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            else if (selectedEvent.CorrelationId != null)
+                            {
+                                <div class="mt-3 pt-3 border-top border-secondary">
+                                    <span class="text-muted small"><i class="bi bi-link-45deg me-1"></i>Aucune requête réseau liée trouvée pour ce CorrelationId.</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card bg-dark text-white border-0 shadow h-100">
+                        <div class="card-header bg-transparent border-secondary py-3">
+                            <h5 class="mb-0">Répartition par Domaine</h5>
+                        </div>
+                        <div class="card-body">
+                            @foreach (var d in domainBreakdown)
+                            {
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="small">@d.Key</span>
+                                        <span class="small fw-bold">@d.Value.ToString("N0")</span>
+                                    </div>
+                                    <div class="progress bg-secondary" style="height: 6px;">
+                                        <div class="progress-bar bg-primary" style="width: @GetDomainPercentage(d.Value)%"></div>
+                                    </div>
+                                </div>
+                            }
+                            <div class="text-center mt-4">
+                                <span class="text-muted small"><i class="bi bi-arrow-left me-1"></i>Cliquez sur un événement pour voir le détail</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Top Lists Section -->
+        <div class="row g-4 mt-4">
+            <!-- Top 10 Pages -->
             <div class="col-lg-4">
                 <div class="card bg-dark text-white border-0 shadow h-100">
                     <div class="card-header bg-transparent border-secondary py-3">
-                        <h5 class="mb-0">Répartition par Domaine</h5>
+                        <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Top 10 Pages les plus vues</h5>
                     </div>
-                    <div class="card-body">
-                        @foreach (var d in domainBreakdown)
-                        {
-                            <div class="mb-3">
-                                <div class="d-flex justify-content-between mb-1">
-                                    <span class="small">@d.Key</span>
-                                    <span class="small fw-bold">@d.Value.ToString("N0")</span>
-                                </div>
-                                <div class="progress bg-secondary" style="height: 6px;">
-                                    <div class="progress-bar bg-primary" style="width: @GetDomainPercentage(d.Value)%"></div>
-                                </div>
-                            </div>
-                        }
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="ps-3">#</th>
+                                        <th>Page</th>
+                                        <th class="text-end pe-3">Vues</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (int i = 0; i < topPages.Count; i++)
+                                    {
+                                        var topPage = topPages[i];
+                                        <tr>
+                                            <td class="ps-3 text-muted">@(i + 1)</td>
+                                            <td class="text-truncate small" style="max-width: 200px;" title="@topPage.Key">@topPage.Key</td>
+                                            <td class="text-end pe-3 fw-bold text-info">@topPage.Value.ToString("N0")</td>
+                                        </tr>
+                                    }
+                                    @if (!topPages.Any())
+                                    {
+                                        <tr><td colspan="3" class="text-center text-muted small py-3">Aucune donnée</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top 10 Countries -->
+            <div class="col-lg-4">
+                <div class="card bg-dark text-white border-0 shadow h-100">
+                    <div class="card-header bg-transparent border-secondary py-3">
+                        <h5 class="mb-0"><i class="bi bi-globe me-2"></i>Top 10 Pays d'origine</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="ps-3">#</th>
+                                        <th>Pays</th>
+                                        <th class="text-end pe-3">Requêtes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (int i = 0; i < topCountries.Count; i++)
+                                    {
+                                        var country = topCountries[i];
+                                        <tr>
+                                            <td class="ps-3 text-muted">@(i + 1)</td>
+                                            <td>@country.Key</td>
+                                            <td class="text-end pe-3 fw-bold text-info">@country.Value.ToString("N0")</td>
+                                        </tr>
+                                    }
+                                    @if (!topCountries.Any())
+                                    {
+                                        <tr><td colspan="3" class="text-center text-muted small py-3">Aucune donnée</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top 10 IPs -->
+            <div class="col-lg-4">
+                <div class="card bg-dark text-white border-0 shadow h-100">
+                    <div class="card-header bg-transparent border-secondary py-3">
+                        <h5 class="mb-0"><i class="bi bi-pc-display me-2"></i>Top 10 IPs les plus actives</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="ps-3">#</th>
+                                        <th>IP</th>
+                                        <th>Pays</th>
+                                        <th class="text-end pe-3">Requêtes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (int i = 0; i < topIps.Count; i++)
+                                    {
+                                        var ip = topIps[i];
+                                        <tr>
+                                            <td class="ps-3 text-muted">@(i + 1)</td>
+                                            <td class="font-monospace small">@ip.ClientHost</td>
+                                            <td class="small">@(ip.CountryCode ?? "-")</td>
+                                            <td class="text-end pe-3 fw-bold text-info">@ip.Count.ToString("N0")</td>
+                                        </tr>
+                                    }
+                                    @if (!topIps.Any())
+                                    {
+                                        <tr><td colspan="4" class="text-center text-muted small py-3">Aucune donnée</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -144,26 +408,66 @@
     private List<AppEvent> recentEvents = new();
     private Dictionary<string, int> domainBreakdown = new();
     private int maxDomainRequests = 1;
+    private AppEvent? selectedEvent;
+    private GlobalAccessLog? linkedLog;
+
+    // Domain filter
+    private List<string> availableDomains = new();
+    private string selectedDomain = "";
+
+    // Top lists
+    private List<KeyValuePair<string, int>> topPages = new();
+    private List<KeyValuePair<string, int>> topCountries = new();
+    private List<TopIpEntry> topIps = new();
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadDomains();
+        await LoadStats();
+    }
+
+    private async Task LoadDomains()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        availableDomains = await context.GlobalAccessLogs
+            .Select(l => l.RequestHost)
+            .Distinct()
+            .OrderBy(h => h)
+            .ToListAsync();
+    }
+
+    private async Task OnDomainFilterChanged(ChangeEventArgs e)
+    {
+        selectedDomain = e.Value?.ToString() ?? "";
+        selectedEvent = null;
+        linkedLog = null;
         await LoadStats();
     }
 
     private async Task LoadStats()
     {
         using var context = await DbFactory.CreateDbContextAsync();
-        
-        var totalReq = await context.GlobalAccessLogs.CountAsync();
-        if (totalReq == 0) 
+
+        IQueryable<GlobalAccessLog> query = context.GlobalAccessLogs;
+        if (!string.IsNullOrEmpty(selectedDomain))
+        {
+            query = query.Where(l => l.RequestHost == selectedDomain);
+        }
+
+        var totalReq = await query.CountAsync();
+        if (totalReq == 0)
         {
             stats = new GlobalStats();
+            domainBreakdown = new();
+            topPages = new();
+            topCountries = new();
+            topIps = new();
             return;
         }
 
-        var avgLat = await context.GlobalAccessLogs.AverageAsync(l => l.DurationMs);
-        var errors = await context.GlobalAccessLogs.CountAsync(l => l.ResponseStatusCode >= 400);
-        var threats = await context.GlobalAccessLogs.CountAsync(l => l.IsBot && l.BotCategory == "ThreatScanner");
+        var avgLat = await query.AverageAsync(l => l.DurationMs);
+        var errors = await query.CountAsync(l => l.ResponseStatusCode >= 400);
+        var threats = await query.CountAsync(l => l.IsBot && l.BotCategory == "ThreatScanner");
 
         stats = new GlobalStats
         {
@@ -178,7 +482,7 @@
             .Take(8)
             .ToListAsync();
 
-        domainBreakdown = await context.GlobalAccessLogs
+        domainBreakdown = await query
             .GroupBy(l => l.RequestHost)
             .Select(g => new { g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
@@ -186,6 +490,58 @@
             .ToDictionaryAsync(x => x.Key, x => x.Count);
 
         maxDomainRequests = domainBreakdown.Values.FirstOrDefault();
+
+        // Top 10 pages
+        topPages = (await query
+            .GroupBy(l => l.RequestPath)
+            .Select(g => new { Path = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(10)
+            .ToListAsync())
+            .Select(x => new KeyValuePair<string, int>(x.Path, x.Count))
+            .ToList();
+
+        // Top 10 countries
+        topCountries = (await query
+            .Where(l => l.CountryName != null)
+            .GroupBy(l => l.CountryName!)
+            .Select(g => new { Country = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(10)
+            .ToListAsync())
+            .Select(x => new KeyValuePair<string, int>(x.Country, x.Count))
+            .ToList();
+
+        // Top 10 IPs
+        topIps = await query
+            .GroupBy(l => new { l.ClientHost, l.CountryCode })
+            .Select(g => new TopIpEntry
+            {
+                ClientHost = g.Key.ClientHost,
+                CountryCode = g.Key.CountryCode,
+                Count = g.Count()
+            })
+            .OrderByDescending(x => x.Count)
+            .Take(10)
+            .ToListAsync();
+    }
+
+    private async Task SelectEvent(AppEvent ev)
+    {
+        selectedEvent = ev;
+        linkedLog = null;
+
+        if (!string.IsNullOrEmpty(ev.CorrelationId))
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            // Chercher la requête réseau Traefik avec le même timestamp (+/- 5 secondes)
+            var window = TimeSpan.FromSeconds(5);
+            linkedLog = await context.GlobalAccessLogs
+                .Where(l => l.Timestamp >= ev.Timestamp.Subtract(window) && l.Timestamp <= ev.Timestamp.Add(window))
+                .Where(l => l.RequestHost.Contains(ev.AppName.Replace("Web", "").ToLower()) || l.RequestPath.Contains("/api/"))
+                .OrderBy(l => Math.Abs((l.Timestamp - ev.Timestamp).TotalMilliseconds))
+                .FirstOrDefaultAsync();
+        }
     }
 
     private string GetLevelClass(string level) => level switch
@@ -193,6 +549,15 @@
         "Error" or "Critical" => "bg-danger",
         "Warning" => "bg-warning text-dark",
         _ => "bg-success"
+    };
+
+    private string GetStatusClass(int status) => status switch
+    {
+        >= 200 and < 300 => "bg-success",
+        >= 300 and < 400 => "bg-info",
+        >= 400 and < 500 => "bg-warning",
+        >= 500 => "bg-danger",
+        _ => "bg-secondary"
     };
 
     private double GetDomainPercentage(int count) => (double)count / maxDomainRequests * 100;
@@ -203,5 +568,12 @@
         public double AverageLatency { get; set; }
         public double ErrorRate { get; set; }
         public int SecurityAlerts { get; set; }
+    }
+
+    private class TopIpEntry
+    {
+        public string ClientHost { get; set; } = "";
+        public string? CountryCode { get; set; }
+        public int Count { get; set; }
     }
 }
