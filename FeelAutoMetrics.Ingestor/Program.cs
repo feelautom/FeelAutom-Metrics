@@ -36,6 +36,9 @@ builder.Services.AddScoped<ILogProcessor, LogProcessor>();
 // Log Retention Background Service
 builder.Services.AddHostedService<LogRetentionService>();
 
+// AI Analyst Background Service (Gemini)
+builder.Services.AddHostedService<AiAnalystService>();
+
 var app = builder.Build();
 
 // Auto-migrate on startup

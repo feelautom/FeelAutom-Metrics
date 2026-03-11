@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<BannedIp> BannedIps { get; set; }
     public DbSet<ExcludedIp> ExcludedIps { get; set; }
     public DbSet<IpThreatScore> IpThreatScores { get; set; }
+    public DbSet<AiAnalysis> AiAnalyses { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -56,6 +57,14 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.IpAddress).IsUnique();
             entity.Property(e => e.IpAddress).IsRequired().HasMaxLength(45);
             entity.Property(e => e.Label).HasMaxLength(100);
+        });
+
+        // Configuration AiAnalysis
+        modelBuilder.Entity<AiAnalysis>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.AnalyzedAt);
+            entity.Property(e => e.Summary).HasMaxLength(4000);
         });
 
         // Configuration AppEvent
