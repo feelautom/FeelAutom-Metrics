@@ -144,7 +144,7 @@ public class AiAnalystService : BackgroundService
 
         // Sauvegarder l'analyse
         var summary = actions.Count > 0
-            ? $"{actions.Count} décisions ({actionCount} bans appliqués). {response[..Math.Min(500, response.Length)]}"
+            ? $"{actions.Count} décisions ({actionCount} bans appliqués). {response[..Math.Min(3900, response.Length)]}"
             : "Aucune action requise.";
 
         db.AiAnalyses.Add(new AiAnalysis
