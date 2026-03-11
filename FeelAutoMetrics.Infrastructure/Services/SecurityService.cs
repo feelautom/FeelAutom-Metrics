@@ -19,6 +19,7 @@ public class SecurityService : ISecurityService
     private readonly ILogger<SecurityService> _logger;
     private readonly IConfiguration _config;
     private static readonly ConcurrentDictionary<string, (int Score, DateTimeOffset LastHit)> _threatScores = new();
+    private const string BanFilePath = "/app/Security/banned-ips.txt";
 
     // Paths classiques de scan/intrusion
     private static readonly string[] ThreatPaths =
@@ -298,10 +299,28 @@ public class SecurityService : ISecurityService
                 db.IpThreatScores.Remove(scoreEntry);
                 await db.SaveChangesAsync();
             }
+
+            // Sync fichier pour iptables
+            await SyncBanFileAsync(db);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erreur auto-ban pour {IP}", ip);
+        }
+    }
+
+    private async Task SyncBanFileAsync(AppDbContext db)
+    {
+        try
+        {
+            var ips = await db.BannedIps.Where(b => b.IsActive).Select(b => b.IpAddress).ToListAsync();
+            var dir = Path.GetDirectoryName(BanFilePath);
+            if (dir != null) Directory.CreateDirectory(dir);
+            await File.WriteAllLinesAsync(BanFilePath, ips);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erreur sync fichier ban");
         }
     }
 
