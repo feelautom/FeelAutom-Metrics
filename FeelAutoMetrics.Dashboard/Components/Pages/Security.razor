@@ -82,7 +82,7 @@
                                         <td class="font-monospace text-danger fw-bold">@ban.IpAddress</td>
                                         <td>
                                             <span class="badge @(ban.BanCount >= 3 ? "bg-danger" : ban.BanCount >= 2 ? "bg-warning text-dark" : "bg-secondary")">
-                                                x@ban.BanCount
+                                                x@(ban.BanCount)
                                             </span>
                                         </td>
                                         <td class="text-muted small" style="max-width: 250px;">@(ban.Reason ?? "-")</td>
