@@ -28,7 +28,9 @@ public class UserAgentService : IUserAgentService
         "Googlebot", "Bingbot", "Applebot", "DuckDuckBot", "Slurp",
         "facebookexternalhit", "LinkedInBot", "Twitterbot",
         "Amazonbot", "YandexBot", "Baiduspider", "SemrushBot",
-        "AhrefsBot", "MJ12bot", "PetalBot", "Bytespider"
+        "AhrefsBot", "MJ12bot", "PetalBot", "Bytespider",
+        "ClaudeBot", "ChatGPT-User", "GPTBot", "PerplexityBot",
+        "com/bot", "DataForSeoBot", "dotbot", "rogerbot"
     ];
 
     public UserAgentService()
