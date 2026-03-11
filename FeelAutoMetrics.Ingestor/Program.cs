@@ -241,6 +241,13 @@ async Task SyncBanFile(AppDbContext db)
     await SyncBanFile(db);
 }
 
+app.MapGet("/api/ai/status", ([FromServices] IConfiguration config) =>
+{
+    var hasKey = !string.IsNullOrEmpty(config["AiAnalyst:GeminiApiKey"]);
+    var interval = config["AiAnalyst:IntervalMinutes"] ?? "15";
+    return Results.Ok(new { enabled = hasKey, intervalMinutes = interval });
+}).WithName("AiStatus");
+
 app.MapGet("/api/security/bans", async ([FromServices] IDbContextFactory<AppDbContext> dbFactory) =>
 {
     using var db = await dbFactory.CreateDbContextAsync();

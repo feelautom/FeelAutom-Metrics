@@ -3,6 +3,7 @@
 @using FeelAutoMetrics.Shared.Models
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject IConfiguration Config
 @rendermode InteractiveServer
 @implements IDisposable
 
@@ -382,8 +383,25 @@
                     }
                     else
                     {
-                        <div class="p-4 text-center text-muted">
-                            <i class="bi bi-robot me-2"></i>Aucune analyse IA pour le moment. Configurez <code>GEMINI_API_KEY</code> pour activer l'AI Analyst.
+                        <div class="p-4 text-center">
+                            @if (aiEnabled == true)
+                            {
+                                <div class="text-success">
+                                    <i class="bi bi-check-circle-fill me-2"></i>AI Analyst activé (toutes les @aiInterval min) — en attente de la première analyse...
+                                </div>
+                            }
+                            else if (aiEnabled == false)
+                            {
+                                <div class="text-danger">
+                                    <i class="bi bi-x-circle-fill me-2"></i><code>GEMINI_API_KEY</code> non configurée sur l'Ingestor — AI Analyst désactivé.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-muted">
+                                    <i class="bi bi-robot me-2"></i>Vérification du statut AI Analyst...
+                                </div>
+                            }
                         </div>
                     }
                 }
@@ -440,6 +458,8 @@
     private string statusIcon = "bi-check-circle-fill";
     private string searchTerm = "";
     private string activeTab = "threats";
+    private bool? aiEnabled;
+    private string aiInterval = "15";
 
     // Pagination
     private int currentPage = 1;
@@ -452,11 +472,36 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+        await CheckAiStatus();
         _refreshTimer = new Timer(async _ =>
         {
             await LoadData();
             await InvokeAsync(StateHasChanged);
         }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    private async Task CheckAiStatus()
+    {
+        try
+        {
+            var baseUrl = Config["IngestorBaseUrl"] ?? "http://ingestor:8080";
+            var apiKey = Config["IngestorApiKey"] ?? "";
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            if (!string.IsNullOrEmpty(apiKey))
+                http.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+            var response = await http.GetAsync($"{baseUrl}/api/ai/status");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                aiEnabled = doc.RootElement.GetProperty("enabled").GetBoolean();
+                aiInterval = doc.RootElement.GetProperty("intervalMinutes").GetString() ?? "15";
+            }
+        }
+        catch
+        {
+            // Ingestor injoignable
+        }
     }
 
     private async Task LoadData()
