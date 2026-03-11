@@ -53,291 +53,343 @@
                     </div>
                 </div>
             </div>
+            <div class="col-md-3">
+                <div class="card bg-dark border-primary text-white shadow">
+                    <div class="card-body">
+                        <h6 class="card-title text-uppercase small text-muted">Analyses IA</h6>
+                        <h2 class="mb-0">@aiAnalyses.Count</h2>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- AI Analyst -->
-        @if (aiAnalyses.Any())
-        {
-            <div class="card bg-dark border-primary text-white shadow mb-4">
-                <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi bi-robot me-2 text-primary"></i>AI Analyst (Gemini)</h5>
-                    <span class="text-muted small">@aiAnalyses.Count dernières analyses</span>
-                </div>
-                <div class="card-body p-0">
-                    <div class="accordion accordion-flush" id="aiAccordion">
-                        @foreach (var (analysis, index) in aiAnalyses.Select((a, i) => (a, i)))
-                        {
-                            var collapseId = $"aiCollapse{index}";
-                            var headerId = $"aiHeader{index}";
-                            var isFirst = index == 0;
-                            <div class="accordion-item bg-dark border-secondary">
-                                <h2 class="accordion-header" id="@headerId">
-                                    <button class="accordion-button @(isFirst ? "" : "collapsed") bg-dark text-white border-0 shadow-none py-2 px-3"
-                                            type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
-                                        <div class="d-flex align-items-center gap-3 w-100">
-                                            <span class="badge @(analysis.ActionsTaken > 0 ? "bg-danger" : "bg-success") rounded-pill">
-                                                @analysis.ActionsTaken ban@(analysis.ActionsTaken != 1 ? "s" : "")
-                                            </span>
-                                            <span class="small text-muted">
-                                                @analysis.AnalyzedAt.LocalDateTime.ToString("dd/MM HH:mm")
-                                            </span>
-                                            <span class="small text-light">
-                                                @analysis.LogsAnalyzed logs analysés
-                                                <span class="text-muted ms-1">
-                                                    (@analysis.LogsFromTimestamp.LocalDateTime.ToString("HH:mm") → @analysis.LogsToTimestamp.LocalDateTime.ToString("HH:mm"))
-                                                </span>
-                                            </span>
-                                        </div>
-                                    </button>
-                                </h2>
-                                <div id="@collapseId" class="accordion-collapse collapse @(isFirst ? "show" : "")" data-bs-parent="#aiAccordion">
-                                    <div class="accordion-body bg-black border-top border-secondary p-3">
-                                        <pre class="mb-0 text-light small" style="white-space: pre-wrap; font-family: inherit;">@analysis.Summary</pre>
-                                    </div>
+        <!-- Tabs -->
+        <ul class="nav nav-tabs border-secondary mb-0">
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "threats" ? "active text-danger" : "text-muted")"
+                        @onclick='() => activeTab = "threats"'>
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Menaces
+                    <span class="badge bg-danger ms-1">@totalThreats.ToString("N0")</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "bans" ? "active text-info" : "text-muted")"
+                        @onclick='() => activeTab = "bans"'>
+                    <i class="bi bi-slash-circle me-1"></i>Bans
+                    <span class="badge bg-info ms-1">@bannedIps.Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "scores" ? "active text-warning" : "text-muted")"
+                        @onclick='() => activeTab = "scores"'>
+                    <i class="bi bi-speedometer2 me-1"></i>Scores
+                    @if (threatScores.Any())
+                    {
+                        <span class="badge bg-warning text-dark ms-1">@threatScores.Count</span>
+                    }
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "ai" ? "active text-primary" : "text-muted")"
+                        @onclick='() => activeTab = "ai"'>
+                    <i class="bi bi-robot me-1"></i>AI Analyst
+                    @if (aiAnalyses.Any())
+                    {
+                        <span class="badge bg-primary ms-1">@aiAnalyses.Count</span>
+                    }
+                </button>
+            </li>
+        </ul>
+
+        <div class="card bg-dark border-secondary text-white shadow border-top-0" style="border-top-left-radius: 0; border-top-right-radius: 0;">
+            <div class="card-body p-0">
+
+                @* ===== TAB: MENACES ===== *@
+                @if (activeTab == "threats")
+                {
+                    <!-- Search -->
+                    <div class="p-3 border-bottom border-secondary">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-black border-secondary text-muted"><i class="bi bi-search"></i></span>
+                                    <input type="text" class="form-control bg-black border-secondary text-white"
+                                           placeholder="Rechercher par IP, domaine, path, type de menace..."
+                                           @bind="searchTerm" @bind:event="oninput"
+                                           @onkeydown="HandleSearchKeyDown" />
+                                    @if (!string.IsNullOrEmpty(searchTerm))
+                                    {
+                                        <button class="btn btn-outline-secondary" @onclick="ClearSearch">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    }
                                 </div>
                             </div>
-                        }
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- Threat Scores -->
-        @if (threatScores.Any())
-        {
-            <div class="card bg-dark border-warning text-white shadow mb-4">
-                <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi bi-speedometer2 me-2 text-warning"></i>Scores de Menace</h5>
-                    <span class="text-muted small">Seuil auto-ban : 200 pts</span>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-dark table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Adresse IP</th>
-                                    <th>Score</th>
-                                    <th>Jauge</th>
-                                    <th>Première vue</th>
-                                    <th>Dernier hit</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var s in threatScores)
-                                {
-                                    var pct = Math.Min(100, (int)(s.Score / 200.0 * 100));
-                                    var barColor = pct >= 75 ? "bg-danger" : pct >= 50 ? "bg-warning" : "bg-info";
-                                    <tr class="align-middle">
-                                        <td class="font-monospace fw-bold text-warning">@s.IpAddress</td>
-                                        <td>
-                                            <span class="badge @(pct >= 75 ? "bg-danger" : pct >= 50 ? "bg-warning text-dark" : "bg-info")">
-                                                @s.Score / 200
-                                            </span>
-                                        </td>
-                                        <td style="min-width: 150px;">
-                                            <div class="progress bg-black" style="height: 8px;">
-                                                <div class="progress-bar @barColor" style="width: @(pct)%"></div>
-                                            </div>
-                                        </td>
-                                        <td class="small text-muted">@s.FirstSeen.LocalDateTime.ToString("dd/MM HH:mm")</td>
-                                        <td class="small text-muted">@s.LastHit.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- Banned IPs Management -->
-        @if (bannedIps.Any())
-        {
-            <div class="card bg-dark border-info text-white shadow mb-4">
-                <div class="card-header bg-transparent border-secondary py-3">
-                    <h5 class="mb-0"><i class="bi bi-slash-circle me-2"></i>IPs Bannies</h5>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-dark table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Adresse IP</th>
-                                    <th>Récidive</th>
-                                    <th>Raison</th>
-                                    <th>Durée</th>
-                                    <th>Expire le</th>
-                                    <th class="text-end">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var ban in bannedIps)
-                                {
-                                    <tr class="align-middle">
-                                        <td class="font-monospace text-danger fw-bold">@ban.IpAddress</td>
-                                        <td>
-                                            <span class="badge @(ban.BanCount >= 3 ? "bg-danger" : ban.BanCount >= 2 ? "bg-warning text-dark" : "bg-secondary")">
-                                                x@(ban.BanCount)
-                                            </span>
-                                        </td>
-                                        <td class="text-muted small" style="max-width: 250px;">@(ban.Reason ?? "-")</td>
-                                        <td>
-                                            @if (ban.ExpiresAt == null)
-                                            {
-                                                <span class="badge bg-danger">Permanent</span>
-                                            }
-                                            else
-                                            {
-                                                var days = (ban.ExpiresAt.Value - ban.BannedAt).TotalDays;
-                                                var label = days <= 1 ? "24h" : days <= 7 ? "7j" : "30j";
-                                                <span class="badge bg-warning text-dark">@label</span>
-                                            }
-                                        </td>
-                                        <td class="small text-muted">
-                                            @if (ban.ExpiresAt != null)
-                                            {
-                                                @ban.ExpiresAt.Value.LocalDateTime.ToString("dd/MM à HH:mm")
-                                            }
-                                            else
-                                            {
-                                                <span>-</span>
-                                            }
-                                        </td>
-                                        <td class="text-end">
-                                            <button class="btn btn-outline-success btn-sm" @onclick="() => UnbanIp(ban.IpAddress)">
-                                                <i class="bi bi-unlock-fill me-1"></i>Débannir
-                                            </button>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        }
-
-        <!-- Search -->
-        <div class="card bg-dark border-secondary text-white shadow mb-4">
-            <div class="card-body py-3">
-                <div class="row g-2 align-items-center">
-                    <div class="col-md-6">
-                        <div class="input-group">
-                            <span class="input-group-text bg-black border-secondary text-muted"><i class="bi bi-search"></i></span>
-                            <input type="text" class="form-control bg-black border-secondary text-white"
-                                   placeholder="Rechercher par IP, domaine, path, type de menace..."
-                                   @bind="searchTerm" @bind:event="oninput"
-                                   @onkeydown="HandleSearchKeyDown" />
-                            @if (!string.IsNullOrEmpty(searchTerm))
-                            {
-                                <button class="btn btn-outline-secondary" @onclick="ClearSearch">
-                                    <i class="bi bi-x-lg"></i>
+                            <div class="col-md-2">
+                                <button class="btn btn-danger w-100" @onclick="DoSearch">
+                                    <i class="bi bi-search me-1"></i>Rechercher
                                 </button>
-                            }
+                            </div>
                         </div>
                     </div>
-                    <div class="col-md-2">
-                        <button class="btn btn-danger w-100" @onclick="DoSearch">
-                            <i class="bi bi-search me-1"></i>Rechercher
-                        </button>
-                    </div>
-                </div>
+
+                    @if (totalThreats > 0)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Cible (Domaine)</th>
+                                        <th>Attaquant (IP)</th>
+                                        <th>Type</th>
+                                        <th>Requête Suspecte</th>
+                                        <th>Origine</th>
+                                        <th class="text-end">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var t in threats)
+                                    {
+                                        var isBanned = bannedSet.Contains(t.ClientHost);
+                                        <tr class="align-middle @(isBanned ? "opacity-50" : "")">
+                                            <td class="small text-muted">@t.Timestamp.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
+                                            <td><span class="badge bg-secondary opacity-75">@t.RequestHost</span></td>
+                                            <td class="font-monospace fw-bold @(isBanned ? "text-muted" : "text-danger")">
+                                                @t.ClientHost
+                                                @if (isBanned)
+                                                {
+                                                    <span class="badge bg-danger ms-2">banni</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="badge @GetThreatBadgeClass(t.ThreatType)">@(t.ThreatType ?? "ThreatBot")</span>
+                                            </td>
+                                            <td class="text-truncate" style="max-width: 300px;">
+                                                <code class="text-warning bg-transparent p-0">@t.RequestPath</code>
+                                            </td>
+                                            <td class="text-light">@t.CountryName</td>
+                                            <td class="text-end">
+                                                @if (!isBanned)
+                                                {
+                                                    <button class="btn btn-danger btn-sm" @onclick="() => BanIp(t.ClientHost, t.RequestPath)">
+                                                        <i class="bi bi-slash-circle me-1"></i>Bannir
+                                                    </button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        <div class="d-flex justify-content-between align-items-center p-3 border-top border-secondary">
+                            <div class="text-muted small">
+                                Page @currentPage / @totalPages — Affichage @((currentPage - 1) * pageSize + 1)-@Math.Min(currentPage * pageSize, totalThreats) sur @totalThreats.ToString("N0")
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage <= 1)" @onclick="FirstPage">
+                                    <i class="bi bi-chevron-double-left"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage <= 1)" @onclick="PrevPage">
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+                                @for (int i = startPage; i <= endPage; i++)
+                                {
+                                    var p = i;
+                                    <button class="btn btn-sm @(p == currentPage ? "btn-danger" : "btn-outline-secondary")" @onclick="() => GoToPage(p)">
+                                        @p
+                                    </button>
+                                }
+                                <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage >= totalPages)" @onclick="NextPage">
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage >= totalPages)" @onclick="LastPage">
+                                    <i class="bi bi-chevron-double-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>Aucune menace active détectée.
+                        </div>
+                    }
+                }
+
+                @* ===== TAB: BANS ===== *@
+                @if (activeTab == "bans")
+                {
+                    @if (bannedIps.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Adresse IP</th>
+                                        <th>Récidive</th>
+                                        <th>Raison</th>
+                                        <th>Durée</th>
+                                        <th>Expire le</th>
+                                        <th class="text-end">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var ban in bannedIps)
+                                    {
+                                        <tr class="align-middle">
+                                            <td class="font-monospace text-danger fw-bold">@ban.IpAddress</td>
+                                            <td>
+                                                <span class="badge @(ban.BanCount >= 3 ? "bg-danger" : ban.BanCount >= 2 ? "bg-warning text-dark" : "bg-secondary")">
+                                                    x@(ban.BanCount)
+                                                </span>
+                                            </td>
+                                            <td class="text-muted small" style="max-width: 300px;">@(ban.Reason ?? "-")</td>
+                                            <td>
+                                                @if (ban.ExpiresAt == null)
+                                                {
+                                                    <span class="badge bg-danger">Permanent</span>
+                                                }
+                                                else
+                                                {
+                                                    var days = (ban.ExpiresAt.Value - ban.BannedAt).TotalDays;
+                                                    var label = days <= 1 ? "24h" : days <= 7 ? "7j" : "30j";
+                                                    <span class="badge bg-warning text-dark">@label</span>
+                                                }
+                                            </td>
+                                            <td class="small text-muted">
+                                                @if (ban.ExpiresAt != null)
+                                                {
+                                                    @ban.ExpiresAt.Value.LocalDateTime.ToString("dd/MM à HH:mm")
+                                                }
+                                                else
+                                                {
+                                                    <span>-</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <button class="btn btn-outline-success btn-sm" @onclick="() => UnbanIp(ban.IpAddress)">
+                                                    <i class="bi bi-unlock-fill me-1"></i>Débannir
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>Aucune IP bannie actuellement.
+                        </div>
+                    }
+                }
+
+                @* ===== TAB: SCORES ===== *@
+                @if (activeTab == "scores")
+                {
+                    @if (threatScores.Any())
+                    {
+                        <div class="p-3 border-bottom border-secondary">
+                            <span class="text-muted small"><i class="bi bi-info-circle me-1"></i>Seuil auto-ban : 200 pts — les IPs ci-dessous accumulent des points suspects.</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Adresse IP</th>
+                                        <th>Score</th>
+                                        <th style="min-width: 180px;">Jauge</th>
+                                        <th>Première vue</th>
+                                        <th>Dernier hit</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var s in threatScores)
+                                    {
+                                        var pct = Math.Min(100, (int)(s.Score / 200.0 * 100));
+                                        var barColor = pct >= 75 ? "bg-danger" : pct >= 50 ? "bg-warning" : "bg-info";
+                                        <tr class="align-middle">
+                                            <td class="font-monospace fw-bold text-warning">@s.IpAddress</td>
+                                            <td>
+                                                <span class="badge @(pct >= 75 ? "bg-danger" : pct >= 50 ? "bg-warning text-dark" : "bg-info")">
+                                                    @s.Score / 200
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="progress bg-black" style="height: 8px;">
+                                                    <div class="progress-bar @barColor" style="width: @(pct)%"></div>
+                                                </div>
+                                            </td>
+                                            <td class="small text-muted">@s.FirstSeen.LocalDateTime.ToString("dd/MM HH:mm")</td>
+                                            <td class="small text-muted">@s.LastHit.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>Aucun score de menace en cours.
+                        </div>
+                    }
+                }
+
+                @* ===== TAB: AI ANALYST ===== *@
+                @if (activeTab == "ai")
+                {
+                    @if (aiAnalyses.Any())
+                    {
+                        <div class="accordion accordion-flush" id="aiAccordion">
+                            @foreach (var (analysis, index) in aiAnalyses.Select((a, i) => (a, i)))
+                            {
+                                var collapseId = $"aiCollapse{index}";
+                                var headerId = $"aiHeader{index}";
+                                var isFirst = index == 0;
+                                <div class="accordion-item bg-dark border-secondary">
+                                    <h2 class="accordion-header" id="@headerId">
+                                        <button class="accordion-button @(isFirst ? "" : "collapsed") bg-dark text-white border-0 shadow-none py-2 px-3"
+                                                type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
+                                            <div class="d-flex align-items-center gap-3 w-100">
+                                                <span class="badge @(analysis.ActionsTaken > 0 ? "bg-danger" : "bg-success") rounded-pill">
+                                                    @analysis.ActionsTaken ban@(analysis.ActionsTaken != 1 ? "s" : "")
+                                                </span>
+                                                <span class="small text-muted">
+                                                    @analysis.AnalyzedAt.LocalDateTime.ToString("dd/MM HH:mm")
+                                                </span>
+                                                <span class="small text-light">
+                                                    @analysis.LogsAnalyzed logs analysés
+                                                    <span class="text-muted ms-1">
+                                                        (@analysis.LogsFromTimestamp.LocalDateTime.ToString("HH:mm") → @analysis.LogsToTimestamp.LocalDateTime.ToString("HH:mm"))
+                                                    </span>
+                                                </span>
+                                            </div>
+                                        </button>
+                                    </h2>
+                                    <div id="@collapseId" class="accordion-collapse collapse @(isFirst ? "show" : "")" data-bs-parent="#aiAccordion">
+                                        <div class="accordion-body bg-black border-top border-secondary p-3">
+                                            <pre class="mb-0 text-light small" style="white-space: pre-wrap; font-family: inherit;">@analysis.Summary</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">
+                            <i class="bi bi-robot me-2"></i>Aucune analyse IA pour le moment. Configurez <code>GEMINI_API_KEY</code> pour activer l'AI Analyst.
+                        </div>
+                    }
+                }
+
             </div>
         </div>
-
-        <!-- Threats Table -->
-        @if (totalThreats > 0)
-        {
-            <div class="card bg-dark border-danger text-white shadow">
-                <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>Menaces Détectées</h5>
-                    <span class="text-muted small">@totalThreats.ToString("N0") menaces au total</span>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-dark table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Cible (Domaine)</th>
-                                    <th>Attaquant (IP)</th>
-                                    <th>Type</th>
-                                    <th>Requête Suspecte</th>
-                                    <th>Origine</th>
-                                    <th class="text-end">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var t in threats)
-                                {
-                                    var isBanned = bannedSet.Contains(t.ClientHost);
-                                    <tr class="align-middle @(isBanned ? "opacity-50" : "")">
-                                        <td class="small text-muted">@t.Timestamp.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
-                                        <td><span class="badge bg-secondary opacity-75">@t.RequestHost</span></td>
-                                        <td class="font-monospace fw-bold @(isBanned ? "text-muted" : "text-danger")">
-                                            @t.ClientHost
-                                            @if (isBanned)
-                                            {
-                                                <span class="badge bg-info ms-2">banni</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            <span class="badge @GetThreatBadgeClass(t.ThreatType)">@(t.ThreatType ?? "ThreatBot")</span>
-                                        </td>
-                                        <td class="text-truncate" style="max-width: 300px;">
-                                            <code class="text-warning bg-transparent p-0">@t.RequestPath</code>
-                                        </td>
-                                        <td class="text-light">@t.CountryName</td>
-                                        <td class="text-end">
-                                            @if (!isBanned)
-                                            {
-                                                <button class="btn btn-danger btn-sm" @onclick="() => BanIp(t.ClientHost, t.RequestPath)">
-                                                    <i class="bi bi-slash-circle me-1"></i>Bannir
-                                                </button>
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Pagination -->
-            <div class="d-flex justify-content-between align-items-center mt-3">
-                <div class="text-muted small">
-                    Page @currentPage / @totalPages — Affichage @((currentPage - 1) * pageSize + 1)-@Math.Min(currentPage * pageSize, totalThreats) sur @totalThreats.ToString("N0")
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage <= 1)" @onclick="FirstPage">
-                        <i class="bi bi-chevron-double-left"></i>
-                    </button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage <= 1)" @onclick="PrevPage">
-                        <i class="bi bi-chevron-left"></i>
-                    </button>
-                    @for (int i = startPage; i <= endPage; i++)
-                    {
-                        var p = i;
-                        <button class="btn btn-sm @(p == currentPage ? "btn-danger" : "btn-outline-secondary")" @onclick="() => GoToPage(p)">
-                            @p
-                        </button>
-                    }
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage >= totalPages)" @onclick="NextPage">
-                        <i class="bi bi-chevron-right"></i>
-                    </button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@(currentPage >= totalPages)" @onclick="LastPage">
-                        <i class="bi bi-chevron-double-right"></i>
-                    </button>
-                </div>
-            </div>
-        }
-        else
-        {
-            <div class="alert alert-success shadow">
-                <i class="bi bi-check-circle-fill me-2"></i>Aucune menace active détectée.
-            </div>
-        }
     }
 </div>
 
@@ -352,6 +404,30 @@
     </div>
 }
 
+<style>
+    .nav-tabs .nav-link {
+        border: none;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        padding: 0.75rem 1.25rem;
+        transition: all 0.2s;
+    }
+    .nav-tabs .nav-link:hover {
+        border-bottom-color: #555;
+        color: #fff !important;
+    }
+    .nav-tabs .nav-link.active {
+        background: transparent;
+        border-bottom-width: 2px;
+        border-bottom-style: solid;
+        font-weight: 600;
+    }
+    .nav-tabs .nav-link.text-danger.active { border-bottom-color: var(--bs-danger); }
+    .nav-tabs .nav-link.text-info.active { border-bottom-color: var(--bs-info); }
+    .nav-tabs .nav-link.text-warning.active { border-bottom-color: var(--bs-warning); }
+    .nav-tabs .nav-link.text-primary.active { border-bottom-color: var(--bs-primary); }
+</style>
+
 @code {
     private List<GlobalAccessLog>? threats;
     private List<BannedIp> bannedIps = new();
@@ -363,6 +439,7 @@
     private string statusClass = "success";
     private string statusIcon = "bi-check-circle-fill";
     private string searchTerm = "";
+    private string activeTab = "threats";
 
     // Pagination
     private int currentPage = 1;
@@ -454,7 +531,6 @@
 
         if (existing != null)
         {
-            // Récidive
             existing.BanCount++;
             existing.IsActive = true;
             existing.Reason = $"Manuel: {path}";

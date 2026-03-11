@@ -108,7 +108,20 @@ public class AiAnalystService : BackgroundService
 
         // Appeler Gemini
         var response = await CallGeminiAsync(apiKey, prompt, ct);
-        if (response == null) return;
+        if (response == null)
+        {
+            // Enregistrer l'échec pour traçabilité
+            db.AiAnalyses.Add(new AiAnalysis
+            {
+                LogsAnalyzed = filteredLogs.Count,
+                ActionsTaken = 0,
+                Summary = "Erreur : impossible de contacter Gemini API (voir logs pour détails).",
+                LogsFromTimestamp = since,
+                LogsToTimestamp = now
+            });
+            await db.SaveChangesAsync(ct);
+            return;
+        }
 
         // Parser et exécuter les actions
         var actions = ParseActions(response);
@@ -207,51 +220,84 @@ public class AiAnalystService : BackgroundService
 
     private async Task<string?> CallGeminiAsync(string apiKey, string prompt, CancellationToken ct)
     {
-        var requestBody = new
+        const int maxRetries = 3;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
-            contents = new[]
+            try
             {
-                new
+                var requestBody = new
                 {
-                    role = "user",
-                    parts = new[] { new { text = prompt } }
+                    contents = new[]
+                    {
+                        new
+                        {
+                            role = "user",
+                            parts = new[] { new { text = prompt } }
+                        }
+                    }
+                };
+
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{GeminiBaseUrl}?key={apiKey}")
+                {
+                    Content = JsonContent.Create(requestBody)
+                };
+
+                var response = await _httpClient.SendAsync(request, ct);
+
+                // 429 Too Many Requests — attendre et réessayer
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(30 * attempt);
+                    _logger.LogWarning("Gemini 429 Rate Limited — retry dans {Seconds}s (tentative {Attempt}/{Max})",
+                        retryAfter.TotalSeconds, attempt, maxRetries);
+                    await Task.Delay(retryAfter, ct);
+                    continue;
                 }
+
+                // 500/503 — erreur serveur, réessayer
+                if ((int)response.StatusCode >= 500)
+                {
+                    _logger.LogWarning("Gemini {Status} Server Error — retry dans {Seconds}s (tentative {Attempt}/{Max})",
+                        response.StatusCode, 10 * attempt, attempt, maxRetries);
+                    await Task.Delay(TimeSpan.FromSeconds(10 * attempt), ct);
+                    continue;
+                }
+
+                // Autres erreurs (400, 401, 403) — pas de retry
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync(ct);
+                    _logger.LogError("Gemini API erreur {Status}: {Error}", response.StatusCode, error[..Math.Min(500, error.Length)]);
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync(ct);
+                using var doc = JsonDocument.Parse(json);
+
+                var text = doc.RootElement
+                    .GetProperty("candidates")[0]
+                    .GetProperty("content")
+                    .GetProperty("parts")[0]
+                    .GetProperty("text")
+                    .GetString();
+
+                _logger.LogDebug("Gemini réponse : {Response}", text?[..Math.Min(200, text?.Length ?? 0)]);
+                return text;
             }
-        };
-
-        var request = new HttpRequestMessage(HttpMethod.Post, $"{GeminiBaseUrl}?key={apiKey}")
-        {
-            Content = JsonContent.Create(requestBody)
-        };
-
-        try
-        {
-            var response = await _httpClient.SendAsync(request, ct);
-            if (!response.IsSuccessStatusCode)
+            catch (TaskCanceledException) when (ct.IsCancellationRequested)
             {
-                var error = await response.Content.ReadAsStringAsync(ct);
-                _logger.LogError("Gemini API erreur {Status}: {Error}", response.StatusCode, error[..Math.Min(500, error.Length)]);
-                return null;
+                throw;
             }
-
-            var json = await response.Content.ReadAsStringAsync(ct);
-            using var doc = JsonDocument.Parse(json);
-
-            var text = doc.RootElement
-                .GetProperty("candidates")[0]
-                .GetProperty("content")
-                .GetProperty("parts")[0]
-                .GetProperty("text")
-                .GetString();
-
-            _logger.LogDebug("Gemini réponse : {Response}", text?[..Math.Min(200, text?.Length ?? 0)]);
-            return text;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur appel Gemini API (tentative {Attempt}/{Max})", attempt, maxRetries);
+                if (attempt == maxRetries) return null;
+                await Task.Delay(TimeSpan.FromSeconds(5 * attempt), ct);
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Erreur appel Gemini API");
-            return null;
-        }
+
+        return null;
     }
 
     private List<AiAction> ParseActions(string response)
