@@ -4,6 +4,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @rendermode InteractiveServer
+@implements IDisposable
 
 <PageTitle>FeelAuto-Metrics | Sécurité (SOC)</PageTitle>
 
@@ -11,9 +12,9 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h3 text-danger"><i class="bi bi-shield-lock-fill me-2"></i>Security Operations Center (SOC)</h1>
-            <p class="text-muted mb-0">Détection globale des menaces et scanners sur l'infrastructure.</p>
+            <p class="text-muted mb-0">Détection globale des menaces et gestion des bannissements.</p>
         </div>
-        <button class="btn btn-outline-danger" @onclick="RefreshThreats">Rafraîchir les menaces</button>
+        <span class="text-muted small"><i class="bi bi-arrow-repeat me-1"></i>Auto-refresh 30s</span>
     </div>
 
     @if (threats == null)
@@ -24,16 +25,11 @@
             </div>
         </div>
     }
-    else if (!threats.Any())
-    {
-        <div class="alert alert-success shadow">
-            <i class="bi bi-check-circle-fill me-2"></i>Aucune menace active détectée sur les dernières 24 heures.
-        </div>
-    }
     else
     {
+        <!-- KPIs -->
         <div class="row mb-4">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card bg-dark border-danger text-white shadow">
                     <div class="card-body">
                         <h6 class="card-title text-uppercase small text-muted">IPs Suspectes</h6>
@@ -41,7 +37,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card bg-dark border-warning text-white shadow">
                     <div class="card-body">
                         <h6 class="card-title text-uppercase small text-muted">Tentatives d'Intrusion</h6>
@@ -49,51 +45,161 @@
                     </div>
                 </div>
             </div>
+            <div class="col-md-3">
+                <div class="card bg-dark border-info text-white shadow">
+                    <div class="card-body">
+                        <h6 class="card-title text-uppercase small text-muted">IPs Bannies</h6>
+                        <h2 class="mb-0">@bannedIps.Count</h2>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="table-responsive bg-dark rounded shadow border border-danger">
-            <table class="table table-dark table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Cible (Domaine)</th>
-                        <th>Attaquant (IP)</th>
-                        <th>Type de Menace</th>
-                        <th>Requête Suspecte</th>
-                        <th>Origine</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var t in threats)
-                    {
-                        <tr class="align-middle">
-                            <td class="small text-muted">@t.Timestamp.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
-                            <td><span class="badge bg-secondary opacity-75">@t.RequestHost</span></td>
-                            <td class="text-danger font-monospace fw-bold">@t.ClientHost</td>
-                            <td>
-                                <span class="badge bg-danger">@t.BotCategory</span>
-                            </td>
-                            <td class="text-truncate" style="max-width: 300px;">
-                                <code class="text-warning bg-transparent p-0">@t.RequestPath</code>
-                            </td>
-                            <td class="text-light">@t.CountryName</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+        <!-- Banned IPs Management -->
+        @if (bannedIps.Any())
+        {
+            <div class="card bg-dark border-info text-white shadow mb-4">
+                <div class="card-header bg-transparent border-secondary py-3">
+                    <h5 class="mb-0"><i class="bi bi-slash-circle me-2"></i>IPs Bannies</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Adresse IP</th>
+                                    <th>Raison</th>
+                                    <th>Durée</th>
+                                    <th>Date de Ban</th>
+                                    <th class="text-end">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var ban in bannedIps)
+                                {
+                                    <tr class="align-middle">
+                                        <td class="font-monospace text-danger fw-bold">@ban.IpAddress</td>
+                                        <td class="text-muted">@(ban.Reason ?? "-")</td>
+                                        <td>
+                                            @if (ban.ExpiresAt == null)
+                                            {
+                                                <span class="badge bg-danger">Permanent</span>
+                                            }
+                                            else
+                                            {
+                                                var remaining = ban.ExpiresAt.Value - DateTimeOffset.UtcNow;
+                                                <span class="badge bg-warning text-dark">@($"{remaining.Hours}h{remaining.Minutes:D2} restantes")</span>
+                                            }
+                                        </td>
+                                        <td class="small text-muted">@ban.BannedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-outline-success btn-sm" @onclick="() => UnbanIp(ban.IpAddress)">
+                                                <i class="bi bi-unlock-fill me-1"></i>Débannir
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Threats Table -->
+        @if (threats.Any())
+        {
+            <div class="card bg-dark border-danger text-white shadow">
+                <div class="card-header bg-transparent border-secondary py-3">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>Dernières Menaces Détectées</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Cible (Domaine)</th>
+                                    <th>Attaquant (IP)</th>
+                                    <th>Requête Suspecte</th>
+                                    <th>Origine</th>
+                                    <th class="text-end">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var t in threats)
+                                {
+                                    var isBanned = bannedSet.Contains(t.ClientHost);
+                                    <tr class="align-middle @(isBanned ? "opacity-50" : "")">
+                                        <td class="small text-muted">@t.Timestamp.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
+                                        <td><span class="badge bg-secondary opacity-75">@t.RequestHost</span></td>
+                                        <td class="font-monospace fw-bold @(isBanned ? "text-muted" : "text-danger")">
+                                            @t.ClientHost
+                                            @if (isBanned)
+                                            {
+                                                <span class="badge bg-info ms-2">banni</span>
+                                            }
+                                        </td>
+                                        <td class="text-truncate" style="max-width: 300px;">
+                                            <code class="text-warning bg-transparent p-0">@t.RequestPath</code>
+                                        </td>
+                                        <td class="text-light">@t.CountryName</td>
+                                        <td class="text-end">
+                                            @if (!isBanned)
+                                            {
+                                                <button class="btn btn-danger btn-sm" @onclick="() => BanIp(t.ClientHost, t.RequestPath)">
+                                                    <i class="bi bi-slash-circle me-1"></i>Bannir
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-success shadow">
+                <i class="bi bi-check-circle-fill me-2"></i>Aucune menace active détectée.
+            </div>
+        }
     }
 </div>
 
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+        <div class="toast show bg-dark border-@statusClass text-white shadow-lg">
+            <div class="toast-body">
+                <i class="bi @statusIcon me-2"></i>@statusMessage
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<GlobalAccessLog>? threats;
+    private List<BannedIp> bannedIps = new();
+    private HashSet<string> bannedSet = new();
+    private Timer? _refreshTimer;
+    private string? statusMessage;
+    private string statusClass = "success";
+    private string statusIcon = "bi-check-circle-fill";
 
     protected override async Task OnInitializedAsync()
     {
-        await RefreshThreats();
+        await LoadData();
+        _refreshTimer = new Timer(async _ =>
+        {
+            await LoadData();
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
 
-    private async Task RefreshThreats()
+    private async Task LoadData()
     {
         using var context = await DbFactory.CreateDbContextAsync();
         threats = await context.GlobalAccessLogs
@@ -101,5 +207,69 @@
             .OrderByDescending(l => l.Timestamp)
             .Take(100)
             .ToListAsync();
+
+        // Nettoyer les bans expirés
+        var expired = await context.BannedIps
+            .Where(b => b.ExpiresAt != null && b.ExpiresAt < DateTimeOffset.UtcNow)
+            .ToListAsync();
+        if (expired.Any())
+        {
+            context.BannedIps.RemoveRange(expired);
+            await context.SaveChangesAsync();
+        }
+
+        bannedIps = await context.BannedIps
+            .OrderByDescending(b => b.BannedAt)
+            .ToListAsync();
+
+        bannedSet = bannedIps.Select(b => b.IpAddress).ToHashSet();
+    }
+
+    private async Task BanIp(string ip, string? path)
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        if (await context.BannedIps.AnyAsync(b => b.IpAddress == ip))
+        {
+            await ShowStatus($"{ip} est déjà banni.", "warning", "bi-exclamation-triangle-fill");
+            return;
+        }
+
+        context.BannedIps.Add(new BannedIp
+        {
+            IpAddress = ip,
+            Reason = $"Threat: {path}"
+        });
+        await context.SaveChangesAsync();
+        await LoadData();
+        await ShowStatus($"{ip} a été banni.", "danger", "bi-slash-circle");
+    }
+
+    private async Task UnbanIp(string ip)
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        var ban = await context.BannedIps.FirstOrDefaultAsync(b => b.IpAddress == ip);
+        if (ban != null)
+        {
+            context.BannedIps.Remove(ban);
+            await context.SaveChangesAsync();
+        }
+        await LoadData();
+        await ShowStatus($"{ip} a été débanni.", "success", "bi-unlock-fill");
+    }
+
+    private async Task ShowStatus(string message, string cssClass, string icon)
+    {
+        statusMessage = message;
+        statusClass = cssClass;
+        statusIcon = icon;
+        StateHasChanged();
+        await Task.Delay(3000);
+        statusMessage = null;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
     }
 }
