@@ -346,37 +346,37 @@
                 {
                     @if (aiAnalyses.Any())
                     {
-                        <div class="accordion accordion-flush" id="aiAccordion">
+                        <div>
                             @foreach (var (analysis, index) in aiAnalyses.Select((a, i) => (a, i)))
                             {
-                                var collapseId = $"aiCollapse{index}";
-                                var headerId = $"aiHeader{index}";
-                                var isFirst = index == 0;
-                                <div class="accordion-item bg-dark border-secondary">
-                                    <h2 class="accordion-header" id="@headerId">
-                                        <button class="accordion-button @(isFirst ? "" : "collapsed") bg-dark text-white border-0 shadow-none py-2 px-3"
-                                                type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
-                                            <div class="d-flex align-items-center gap-3 w-100">
-                                                <span class="badge @(analysis.ActionsTaken > 0 ? "bg-danger" : "bg-success") rounded-pill">
-                                                    @analysis.ActionsTaken ban@(analysis.ActionsTaken != 1 ? "s" : "")
+                                var idx = index;
+                                var isOpen = expandedAiIndex == idx;
+                                <div class="border-bottom border-secondary">
+                                    <button class="btn btn-link w-100 text-start text-decoration-none py-2 px-3 d-flex align-items-center"
+                                            style="background: transparent;"
+                                            @onclick="() => ToggleAiAccordion(idx)">
+                                        <div class="d-flex align-items-center gap-3 w-100">
+                                            <span class="badge @(analysis.ActionsTaken > 0 ? "bg-danger" : "bg-success") rounded-pill">
+                                                @analysis.ActionsTaken ban@(analysis.ActionsTaken != 1 ? "s" : "")
+                                            </span>
+                                            <span class="small text-muted">
+                                                @analysis.AnalyzedAt.LocalDateTime.ToString("dd/MM HH:mm")
+                                            </span>
+                                            <span class="small text-light">
+                                                @analysis.LogsAnalyzed logs analysés
+                                                <span class="text-muted ms-1">
+                                                    (@analysis.LogsFromTimestamp.LocalDateTime.ToString("HH:mm") → @analysis.LogsToTimestamp.LocalDateTime.ToString("HH:mm"))
                                                 </span>
-                                                <span class="small text-muted">
-                                                    @analysis.AnalyzedAt.LocalDateTime.ToString("dd/MM HH:mm")
-                                                </span>
-                                                <span class="small text-light">
-                                                    @analysis.LogsAnalyzed logs analysés
-                                                    <span class="text-muted ms-1">
-                                                        (@analysis.LogsFromTimestamp.LocalDateTime.ToString("HH:mm") → @analysis.LogsToTimestamp.LocalDateTime.ToString("HH:mm"))
-                                                    </span>
-                                                </span>
-                                            </div>
-                                        </button>
-                                    </h2>
-                                    <div id="@collapseId" class="accordion-collapse collapse @(isFirst ? "show" : "")" data-bs-parent="#aiAccordion">
-                                        <div class="accordion-body bg-black border-top border-secondary p-3">
+                                            </span>
+                                            <i class="bi @(isOpen ? "bi-chevron-up" : "bi-chevron-down") ms-auto text-muted"></i>
+                                        </div>
+                                    </button>
+                                    @if (isOpen)
+                                    {
+                                        <div class="bg-black border-top border-secondary p-3">
                                             <pre class="mb-0 text-light small" style="white-space: pre-wrap; font-family: inherit;">@analysis.Summary</pre>
                                         </div>
-                                    </div>
+                                    }
                                 </div>
                             }
                         </div>
@@ -469,6 +469,7 @@
     private bool? aiEnabled;
     private string aiInterval = "15";
     private string? aiStatusError;
+    private int? expandedAiIndex = 0;
 
     // Pagination
     private int currentPage = 1;
@@ -652,6 +653,11 @@
         "ThreatBot" => "bg-info",
         _ => "bg-secondary"
     };
+
+    private void ToggleAiAccordion(int index)
+    {
+        expandedAiIndex = expandedAiIndex == index ? null : index;
+    }
 
     private async Task DoSearch() { currentPage = 1; await LoadData(); }
     private async Task ClearSearch() { searchTerm = ""; currentPage = 1; await LoadData(); }
