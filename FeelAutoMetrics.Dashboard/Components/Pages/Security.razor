@@ -56,18 +56,48 @@
         </div>
 
         <!-- AI Analyst -->
-        @if (lastAiAnalysis != null)
+        @if (aiAnalyses.Any())
         {
             <div class="card bg-dark border-primary text-white shadow mb-4">
                 <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="bi bi-robot me-2 text-primary"></i>AI Analyst (Gemini)</h5>
-                    <span class="text-muted small">
-                        Dernière analyse : @lastAiAnalysis.AnalyzedAt.LocalDateTime.ToString("dd/MM HH:mm")
-                        — @lastAiAnalysis.LogsAnalyzed logs — @lastAiAnalysis.ActionsTaken actions
-                    </span>
+                    <span class="text-muted small">@aiAnalyses.Count dernières analyses</span>
                 </div>
-                <div class="card-body">
-                    <p class="mb-0 small text-light">@lastAiAnalysis.Summary</p>
+                <div class="card-body p-0">
+                    <div class="accordion accordion-flush" id="aiAccordion">
+                        @foreach (var (analysis, index) in aiAnalyses.Select((a, i) => (a, i)))
+                        {
+                            var collapseId = $"aiCollapse{index}";
+                            var headerId = $"aiHeader{index}";
+                            var isFirst = index == 0;
+                            <div class="accordion-item bg-dark border-secondary">
+                                <h2 class="accordion-header" id="@headerId">
+                                    <button class="accordion-button @(isFirst ? "" : "collapsed") bg-dark text-white border-0 shadow-none py-2 px-3"
+                                            type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
+                                        <div class="d-flex align-items-center gap-3 w-100">
+                                            <span class="badge @(analysis.ActionsTaken > 0 ? "bg-danger" : "bg-success") rounded-pill">
+                                                @analysis.ActionsTaken ban@(analysis.ActionsTaken != 1 ? "s" : "")
+                                            </span>
+                                            <span class="small text-muted">
+                                                @analysis.AnalyzedAt.LocalDateTime.ToString("dd/MM HH:mm")
+                                            </span>
+                                            <span class="small text-light">
+                                                @analysis.LogsAnalyzed logs analysés
+                                                <span class="text-muted ms-1">
+                                                    (@analysis.LogsFromTimestamp.LocalDateTime.ToString("HH:mm") → @analysis.LogsToTimestamp.LocalDateTime.ToString("HH:mm"))
+                                                </span>
+                                            </span>
+                                        </div>
+                                    </button>
+                                </h2>
+                                <div id="@collapseId" class="accordion-collapse collapse @(isFirst ? "show" : "")" data-bs-parent="#aiAccordion">
+                                    <div class="accordion-body bg-black border-top border-secondary p-3">
+                                        <pre class="mb-0 text-light small" style="white-space: pre-wrap; font-family: inherit;">@analysis.Summary</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
         }
@@ -326,7 +356,7 @@
     private List<GlobalAccessLog>? threats;
     private List<BannedIp> bannedIps = new();
     private List<IpThreatScore> threatScores = new();
-    private AiAnalysis? lastAiAnalysis;
+    private List<AiAnalysis> aiAnalyses = new();
     private HashSet<string> bannedSet = new();
     private Timer? _refreshTimer;
     private string? statusMessage;
@@ -405,9 +435,10 @@
             .Take(50)
             .ToListAsync();
 
-        lastAiAnalysis = await context.AiAnalyses
+        aiAnalyses = await context.AiAnalyses
             .OrderByDescending(a => a.AnalyzedAt)
-            .FirstOrDefaultAsync();
+            .Take(20)
+            .ToListAsync();
     }
 
     private async Task BanIp(string ip, string? path)
