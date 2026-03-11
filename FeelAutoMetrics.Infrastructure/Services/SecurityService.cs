@@ -96,10 +96,11 @@ public class SecurityService : ISecurityService
         }
 
         // 2. Scan sur IP directe (RequestHost = IP au lieu d'un domaine)
+        // 50pts = ban après ~4 requêtes (compromis entre sécurité et faux positifs)
         if (threatType == null && IsIpAddress(log.RequestHost))
         {
             threatType = "DirectIpScan";
-            points = 10;
+            points = 50;
         }
 
         // 3. Extensions suspectes (.php, .sql, .bak sur un site .NET)

@@ -70,6 +70,134 @@
             }
         </div>
     </div>
+
+    <!-- Database Stats -->
+    <div class="card bg-dark border-secondary text-white shadow mb-4">
+        <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0"><i class="bi bi-database me-2"></i>Base de Données</h5>
+                <small class="text-muted">Statistiques et maintenance de la base PostgreSQL.</small>
+            </div>
+            <button class="btn btn-outline-info btn-sm" @onclick="LoadDbStats" disabled="@dbLoading">
+                <i class="bi bi-arrow-repeat me-1 @(dbLoading ? "spin" : "")"></i>Rafraîchir
+            </button>
+        </div>
+        <div class="card-body">
+            @if (dbStats == null)
+            {
+                <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+            }
+            else
+            {
+                <!-- Taille globale -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-dark border-info">
+                            <div class="card-body text-center py-3">
+                                <div class="text-muted text-uppercase small">Taille Totale</div>
+                                <h3 class="mb-0 @(dbStats.TotalSizeMb > 500 ? "text-danger" : dbStats.TotalSizeMb > 200 ? "text-warning" : "text-info")">
+                                    @FormatSize(dbStats.TotalSizeBytes)
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body text-center py-3">
+                                <div class="text-muted text-uppercase small">Logs d'Accès</div>
+                                <h3 class="mb-0 text-white">@dbStats.LogCount.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body text-center py-3">
+                                <div class="text-muted text-uppercase small">Événements App</div>
+                                <h3 class="mb-0 text-white">@dbStats.EventCount.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body text-center py-3">
+                                <div class="text-muted text-uppercase small">Scores Menace</div>
+                                <h3 class="mb-0 text-white">@dbStats.ThreatScoreCount.ToString("N0")</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Détail par table -->
+                <div class="table-responsive mb-4">
+                    <table class="table table-dark table-sm mb-0">
+                        <thead>
+                            <tr class="text-muted text-uppercase small">
+                                <th>Table</th>
+                                <th class="text-end">Lignes</th>
+                                <th class="text-end">Taille</th>
+                                <th>Barre</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in dbStats.Tables)
+                            {
+                                <tr class="align-middle">
+                                    <td class="font-monospace text-info">@t.Name</td>
+                                    <td class="text-end">@t.RowCount.ToString("N0")</td>
+                                    <td class="text-end fw-bold">@FormatSize(t.SizeBytes)</td>
+                                    <td style="min-width: 120px;">
+                                        <div class="progress bg-secondary" style="height: 5px;">
+                                            <div class="progress-bar bg-info" style="width: @(dbStats.TotalSizeBytes > 0 ? (double)t.SizeBytes / dbStats.TotalSizeBytes * 100 : 0)%"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (dbStats.OldestLog != null)
+                {
+                    <div class="text-muted small mb-3">
+                        <i class="bi bi-clock-history me-1"></i>Plus ancien log : @dbStats.OldestLog.Value.LocalDateTime.ToString("dd/MM/yyyy HH:mm")
+                        — Plage couverte : @((DateTimeOffset.UtcNow - dbStats.OldestLog.Value).Days) jours
+                    </div>
+                }
+
+                <!-- Rétention -->
+                <div class="border-top border-secondary pt-3">
+                    <h6 class="text-muted text-uppercase small mb-3">Rotation des Données</h6>
+                    <div class="d-flex gap-3 align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="text-muted small">Supprimer les logs de plus de</span>
+                            <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 120px;"
+                                    @bind="purgeDays">
+                                <option value="7">7 jours</option>
+                                <option value="14">14 jours</option>
+                                <option value="30">30 jours</option>
+                                <option value="60">60 jours</option>
+                                <option value="90">90 jours</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-warning btn-sm" @onclick="PurgeLogs" disabled="@purging">
+                            @if (purging)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-trash me-1"></i>
+                            }
+                            Purger maintenant
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        <i class="bi bi-info-circle me-1"></i>La rétention automatique est configurée à 60 jours (exécutée quotidiennement).
+                    </small>
+                </div>
+            }
+        </div>
+    </div>
 </div>
 
 @if (!string.IsNullOrEmpty(statusMessage))
@@ -91,9 +219,16 @@
     private string statusClass = "success";
     private string statusIcon = "bi-check-circle-fill";
 
+    // DB Stats
+    private DbStatsModel? dbStats;
+    private bool dbLoading;
+    private int purgeDays = 30;
+    private bool purging;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+        await LoadDbStats();
     }
 
     private async Task LoadData()
@@ -102,6 +237,102 @@
         excludedIps = await context.ExcludedIps
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync();
+    }
+
+    private async Task LoadDbStats()
+    {
+        dbLoading = true;
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var stats = new DbStatsModel();
+
+            // Taille totale de la base
+            try
+            {
+                var conn = context.Database.GetDbConnection();
+                await conn.OpenAsync();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT pg_database_size(current_database())";
+                var result = await cmd.ExecuteScalarAsync();
+                stats.TotalSizeBytes = Convert.ToInt64(result);
+
+                // Taille par table
+                cmd.CommandText = @"
+                    SELECT relname as table_name,
+                           n_live_tup as row_count,
+                           pg_total_relation_size(quote_ident(relname)) as total_size
+                    FROM pg_stat_user_tables
+                    ORDER BY pg_total_relation_size(quote_ident(relname)) DESC";
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    stats.Tables.Add(new TableStats
+                    {
+                        Name = reader.GetString(0),
+                        RowCount = reader.GetInt64(1),
+                        SizeBytes = reader.GetInt64(2)
+                    });
+                }
+            }
+            catch { /* Fallback si les requêtes pg_stat échouent */ }
+
+            stats.LogCount = await context.GlobalAccessLogs.CountAsync();
+            stats.EventCount = await context.AppEvents.CountAsync();
+            stats.ThreatScoreCount = await context.IpThreatScores.CountAsync();
+
+            var oldest = await context.GlobalAccessLogs
+                .OrderBy(l => l.Timestamp)
+                .Select(l => (DateTimeOffset?)l.Timestamp)
+                .FirstOrDefaultAsync();
+            stats.OldestLog = oldest;
+
+            stats.TotalSizeMb = stats.TotalSizeBytes / 1_048_576.0;
+
+            dbStats = stats;
+        }
+        finally
+        {
+            dbLoading = false;
+        }
+    }
+
+    private async Task PurgeLogs()
+    {
+        purging = true;
+        StateHasChanged();
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var cutoff = DateTimeOffset.UtcNow.AddDays(-purgeDays);
+
+            var deletedLogs = await context.GlobalAccessLogs
+                .Where(l => l.Timestamp < cutoff)
+                .ExecuteDeleteAsync();
+
+            var deletedEvents = await context.AppEvents
+                .Where(e => e.Timestamp < cutoff)
+                .ExecuteDeleteAsync();
+
+            await LoadDbStats();
+            await ShowStatus($"Purge terminée : {deletedLogs:N0} logs et {deletedEvents:N0} événements supprimés.", "success", "bi-check-circle-fill");
+        }
+        catch (Exception ex)
+        {
+            await ShowStatus($"Erreur lors de la purge : {ex.Message}", "danger", "bi-x-circle-fill");
+        }
+        finally
+        {
+            purging = false;
+        }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes >= 1_073_741_824) return $"{bytes / 1_073_741_824.0:N2} GB";
+        if (bytes >= 1_048_576) return $"{bytes / 1_048_576.0:N1} MB";
+        if (bytes >= 1024) return $"{bytes / 1024.0:N0} KB";
+        return $"{bytes} B";
     }
 
     private async Task AddExcludedIp()
@@ -156,5 +387,23 @@
         await Task.Delay(3000);
         statusMessage = null;
         StateHasChanged();
+    }
+
+    private class DbStatsModel
+    {
+        public long TotalSizeBytes { get; set; }
+        public double TotalSizeMb { get; set; }
+        public int LogCount { get; set; }
+        public int EventCount { get; set; }
+        public int ThreatScoreCount { get; set; }
+        public DateTimeOffset? OldestLog { get; set; }
+        public List<TableStats> Tables { get; set; } = new();
+    }
+
+    private class TableStats
+    {
+        public string Name { get; set; } = "";
+        public long RowCount { get; set; }
+        public long SizeBytes { get; set; }
     }
 }
