@@ -40,35 +40,35 @@
                 <tbody>
                     @foreach (var log in logs)
                     {
-                        <tr>
+                        <tr class="align-middle">
                             <td class="small text-muted">@log.Timestamp.LocalDateTime.ToString("HH:mm:ss")</td>
-                            <td><span class="badge bg-secondary">@log.RequestHost</span></td>
-                            <td>@log.ClientHost</td>
+                            <td><span class="badge bg-secondary opacity-75">@log.RequestHost</span></td>
+                            <td class="text-light small">@log.ClientHost</td>
                             <td class="text-truncate" style="max-width: 300px;">
-                                <span class="text-info me-2">@log.RequestMethod</span>
-                                <span>@log.RequestPath</span>
+                                <span class="text-info me-2 fw-bold">@log.RequestMethod</span>
+                                <span class="text-white-50 small">@log.RequestPath</span>
                             </td>
                             <td>
                                 <span class="badge @GetStatusClass(log.ResponseStatusCode)">@log.ResponseStatusCode</span>
                             </td>
-                            <td>
+                            <td class="text-light">
                                 @if (!string.IsNullOrEmpty(log.CountryCode))
                                 {
-                                    <span>@log.CountryCode - @log.CityName</span>
+                                    <span class="fw-bold">@log.CountryCode</span><span class="text-muted mx-1">-</span><span>@log.CityName</span>
                                 }
                                 else
                                 {
                                     <span class="text-muted small">-</span>
                                 }
                             </td>
-                            <td class="small">
+                            <td class="small text-light">
                                 @if (log.IsBot)
                                 {
-                                    <span class="badge bg-warning text-dark">Bot</span>
+                                    <span class="badge bg-warning text-dark me-1">Bot</span>
                                 }
-                                @log.BrowserName @log.BrowserVersion
+                                @log.BrowserName
                             </td>
-                            <td class="text-end">@log.DurationMs</td>
+                            <td class="text-end fw-bold text-info">@log.DurationMs<small class="text-muted ms-1">ms</small></td>
                         </tr>
                     }
                 </tbody>

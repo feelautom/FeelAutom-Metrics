@@ -13,7 +13,8 @@ console.log(`🔗 Envoi vers : ${INGESTOR_URL}`);
 console.log(`📦 Écoute du conteneur : ${CONTAINER_NAME}`);
 
 function startShipping() {
-    const docker = spawn('docker', ['logs', '-f', CONTAINER_NAME]);
+    // --since=0s : ne suivre que les nouveaux logs (pas l'historique)
+    const docker = spawn('docker', ['logs', '-f', '--since', '0s', CONTAINER_NAME]);
 
     docker.stdout.on('data', async (data) => {
         const lines = data.toString().split('\n');
@@ -21,18 +22,18 @@ function startShipping() {
             if (!line.trim()) continue;
 
             try {
-                // Tenter de parser pour vérifier que c'est du JSON
                 const json = JSON.parse(line);
-                
-                // Envoyer à l'ingestor
+
+                // Ignorer les logs d'erreur Traefik (pas des access logs)
+                if (!json.ClientHost) continue;
+
                 axios.post(INGESTOR_URL, json)
                     .catch(err => {
                         console.error(`❌ Erreur d'envoi [${err.code}]: ${err.message}`);
                     });
 
             } catch (e) {
-                // Ce n'est pas du JSON, on ignore (logs système traefik non-access)
-                // console.log(`ℹ️ Ignoré (non-JSON) : ${line.substring(0, 50)}...`);
+                // Pas du JSON, on ignore
             }
         }
     });

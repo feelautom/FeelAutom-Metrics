@@ -1,5 +1,5 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="fr" data-bs-theme="dark">
 
 <head>
     <meta charset="utf-8" />
@@ -10,7 +10,81 @@
     <link rel="stylesheet" href="@Assets["FeelAutoMetrics.Dashboard.styles.css"]" />
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <HeadOutlet />
+    <style>
+        :root {
+            --bs-body-bg: #1a1a1a; /* Gris anthracite studio */
+            --bs-body-color: #d1d1d1;
+            --sidebar-bg: #111111;
+            --nav-hover: #2a2a2a;
+            --bs-primary: #3d8bfd;
+        }
+        body {
+            background-color: var(--bs-body-bg);
+            color: var(--bs-body-color);
+        }
+        .sidebar {
+            background-color: var(--sidebar-bg) !important;
+            background-image: none !important; /* Supprime tout dégradé résiduel */
+            border-right: 1px solid #222;
+            width: 280px;
+        }
+        .nav-item {
+            padding: 0 !important;
+            margin-bottom: 2px;
+        }
+        .nav-link {
+            display: flex !important;
+            align-items: center !important;
+            padding: 0.8rem 1.5rem !important;
+            color: #aaa !important;
+            border-radius: 0 !important;
+            transition: all 0.2s;
+        }
+        .nav-link:hover {
+            background-color: var(--nav-hover) !important;
+            color: #fff !important;
+        }
+        .nav-link.active {
+            background-color: rgba(61, 139, 253, 0.15) !important;
+            color: var(--bs-primary) !important;
+            border-left: 3px solid var(--bs-primary);
+        }
+        .nav-link i, .nav-link .bi {
+            font-size: 1.25rem;
+            margin-right: 15px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            vertical-align: middle;
+        }
+        .card {
+            background-color: #222222 !important;
+            border: 1px solid #333 !important;
+            border-radius: 12px;
+        }
+        .top-row {
+            background-color: #151515 !important;
+            border-bottom: 1px solid #222;
+            height: 3.5rem;
+            display: flex;
+            align-items: center;
+        }
+        .navbar-brand {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #fff !important;
+            padding: 1.5rem !important;
+        }
+        h1:focus, h2:focus, h3:focus, h4:focus, h5:focus, h6:focus {
+            outline: none !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+    </style>
 </head>
 
 <body>

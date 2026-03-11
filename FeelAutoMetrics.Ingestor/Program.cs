@@ -27,13 +27,29 @@ builder.Services.AddScoped<ILogProcessor, LogProcessor>();
 
 var app = builder.Build();
 
+// Auto-migrate on startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// Pas de UseHttpsRedirection() : Traefik gère le TLS en amont
+
+// Root endpoint for health check
+app.MapGet("/", () => Results.Ok(new 
+{ 
+    Name = "FeelAuto-Metrics Ingestor", 
+    Status = "Online", 
+    Time = DateTimeOffset.UtcNow 
+}))
+.WithName("HealthCheck");
 
 // Ingestion Endpoint (Traefik Logs)
 app.MapPost("/api/logs/ingest", async ([FromBody] object rawLog, [FromServices] ILogProcessor processor, [FromServices] AppDbContext db) =>

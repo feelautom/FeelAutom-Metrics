@@ -1,0 +1,105 @@
+@page "/security"
+@using FeelAutoMetrics.Infrastructure.Data
+@using FeelAutoMetrics.Shared.Models
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@rendermode InteractiveServer
+
+<PageTitle>FeelAuto-Metrics | Sécurité (SOC)</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 text-danger"><i class="bi bi-shield-lock-fill me-2"></i>Security Operations Center (SOC)</h1>
+            <p class="text-muted mb-0">Détection globale des menaces et scanners sur l'infrastructure.</p>
+        </div>
+        <button class="btn btn-outline-danger" @onclick="RefreshThreats">Rafraîchir les menaces</button>
+    </div>
+
+    @if (threats == null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-danger" role="status">
+                <span class="visually-hidden">Analyse en cours...</span>
+            </div>
+        </div>
+    }
+    else if (!threats.Any())
+    {
+        <div class="alert alert-success shadow">
+            <i class="bi bi-check-circle-fill me-2"></i>Aucune menace active détectée sur les dernières 24 heures.
+        </div>
+    }
+    else
+    {
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card bg-dark border-danger text-white shadow">
+                    <div class="card-body">
+                        <h6 class="card-title text-uppercase small text-muted">IPs Suspectes</h6>
+                        <h2 class="mb-0">@threats.Select(t => t.ClientHost).Distinct().Count()</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-dark border-warning text-white shadow">
+                    <div class="card-body">
+                        <h6 class="card-title text-uppercase small text-muted">Tentatives d'Intrusion</h6>
+                        <h2 class="mb-0">@threats.Count()</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive bg-dark rounded shadow border border-danger">
+            <table class="table table-dark table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Cible (Domaine)</th>
+                        <th>Attaquant (IP)</th>
+                        <th>Type de Menace</th>
+                        <th>Requête Suspecte</th>
+                        <th>Origine</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in threats)
+                    {
+                        <tr class="align-middle">
+                            <td class="small text-muted">@t.Timestamp.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
+                            <td><span class="badge bg-secondary opacity-75">@t.RequestHost</span></td>
+                            <td class="text-danger font-monospace fw-bold">@t.ClientHost</td>
+                            <td>
+                                <span class="badge bg-danger">@t.BotCategory</span>
+                            </td>
+                            <td class="text-truncate" style="max-width: 300px;">
+                                <code class="text-warning bg-transparent p-0">@t.RequestPath</code>
+                            </td>
+                            <td class="text-light">@t.CountryName</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<GlobalAccessLog>? threats;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshThreats();
+    }
+
+    private async Task RefreshThreats()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        threats = await context.GlobalAccessLogs
+            .Where(l => l.IsBot && l.BotCategory == "ThreatScanner")
+            .OrderByDescending(l => l.Timestamp)
+            .Take(100)
+            .ToListAsync();
+    }
+}
