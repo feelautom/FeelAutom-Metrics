@@ -527,8 +527,14 @@
         if (excludedIps.Any())
             baseQuery = baseQuery.Where(l => !excludedIps.Contains(l.ClientHost));
 
+        // Exclure les IPs bannies de la liste des menaces
+        var bannedIpList = await context.BannedIps
+            .Where(b => b.IsActive)
+            .Select(b => b.IpAddress)
+            .ToListAsync();
+
         var query = baseQuery
-            .Where(l => l.IsSuspicious);
+            .Where(l => l.IsSuspicious && !bannedIpList.Contains(l.ClientHost));
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
