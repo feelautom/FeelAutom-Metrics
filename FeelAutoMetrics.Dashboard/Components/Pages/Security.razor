@@ -399,7 +399,15 @@
                             else
                             {
                                 <div class="text-muted">
-                                    <i class="bi bi-robot me-2"></i>Vérification du statut AI Analyst...
+                                    <i class="bi bi-robot me-2"></i>
+                                    @if (aiStatusError != null)
+                                    {
+                                        <span class="text-warning">@aiStatusError</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Vérification du statut AI Analyst...</span>
+                                    }
                                 </div>
                             }
                         </div>
@@ -460,6 +468,7 @@
     private string activeTab = "threats";
     private bool? aiEnabled;
     private string aiInterval = "15";
+    private string? aiStatusError;
 
     // Pagination
     private int currentPage = 1;
@@ -485,10 +494,10 @@
         try
         {
             var baseUrl = Config["IngestorBaseUrl"] ?? "http://ingestor:8080";
-            var apiKey = Config["IngestorApiKey"] ?? "";
+            var ingestorKey = Config["IngestorApiKey"] ?? "";
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            if (!string.IsNullOrEmpty(apiKey))
-                http.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+            if (!string.IsNullOrEmpty(ingestorKey))
+                http.DefaultRequestHeaders.Add("X-Api-Key", ingestorKey);
             var response = await http.GetAsync($"{baseUrl}/api/ai/status");
             if (response.IsSuccessStatusCode)
             {
@@ -497,10 +506,14 @@
                 aiEnabled = doc.RootElement.GetProperty("enabled").GetBoolean();
                 aiInterval = doc.RootElement.GetProperty("intervalMinutes").GetString() ?? "15";
             }
+            else
+            {
+                aiStatusError = $"Ingestor HTTP {(int)response.StatusCode}";
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ingestor injoignable
+            aiStatusError = $"Ingestor injoignable : {ex.Message}";
         }
     }
 
