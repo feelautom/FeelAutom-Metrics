@@ -104,7 +104,7 @@ public class AiAnalystService : BackgroundService
         }
 
         // Construire le résumé compact pour Gemini
-        var prompt = BuildPrompt(filteredLogs, activeBans);
+        var prompt = BuildPrompt(filteredLogs, activeBans, whitelistedIps);
 
         // Appeler Gemini
         var (response, geminiError) = await CallGeminiAsync(apiKey, prompt, ct);
@@ -160,7 +160,7 @@ public class AiAnalystService : BackgroundService
         _logger.LogInformation("AI Analyst : {LogCount} logs analysés, {Actions} actions", filteredLogs.Count, actionCount);
     }
 
-    private string BuildPrompt(List<GlobalAccessLog> logs, List<string> activeBans)
+    private string BuildPrompt(List<GlobalAccessLog> logs, List<string> activeBans, List<string> whitelistedIps)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Tu es un analyste SOC (Security Operations Center) pour une infrastructure web.");
@@ -168,6 +168,7 @@ public class AiAnalystService : BackgroundService
         sb.AppendLine();
         sb.AppendLine("CONTEXTE :");
         sb.AppendLine($"- IPs actuellement bannies : {string.Join(", ", activeBans.Take(30))}");
+        sb.AppendLine($"- IPs whitelistées (JAMAIS bannir) : {(whitelistedIps.Any() ? string.Join(", ", whitelistedIps) : "aucune")}");
         sb.AppendLine($"- Période analysée : {logs.Min(l => l.Timestamp):HH:mm:ss} → {logs.Max(l => l.Timestamp):HH:mm:ss}");
         sb.AppendLine($"- Nombre de logs : {logs.Count}");
         sb.AppendLine();
