@@ -75,36 +75,36 @@ public class AiAnalystService : BackgroundService
         var since = lastAnalysis?.LogsToTimestamp ?? DateTimeOffset.UtcNow.AddMinutes(-30);
         var now = DateTimeOffset.UtcNow;
 
-        // Récupérer les logs depuis la dernière analyse (max 2000 pour ne pas exploser le prompt)
-        var logs = await db.GlobalAccessLogs
-            .Where(l => l.Timestamp > since && l.Timestamp <= now)
+        // Récupérer les menaces détectées (IsSuspicious) depuis la dernière analyse
+        var threats = await db.GlobalAccessLogs
+            .Where(l => l.IsSuspicious && l.Timestamp > since && l.Timestamp <= now)
             .OrderByDescending(l => l.Timestamp)
             .Take(2000)
             .ToListAsync(ct);
 
-        if (logs.Count < 10)
-        {
-            _logger.LogDebug("AI Analyst : seulement {Count} logs, analyse reportée", logs.Count);
-            return;
-        }
+        // Récupérer les scores de menace en cours
+        var threatScores = await db.IpThreatScores
+            .OrderByDescending(s => s.Score)
+            .Take(50)
+            .ToListAsync(ct);
 
         // Récupérer le contexte : bans actifs et scores en cours
         var activeBans = await db.BannedIps.Where(b => b.IsActive).Select(b => b.IpAddress).ToListAsync(ct);
         var excludedIps = await db.ExcludedIps.Select(e => e.IpAddress).ToListAsync(ct);
         var whitelistedIps = _config["Security:WhitelistedIps"]?.Split(',').Select(i => i.Trim()).ToList() ?? [];
 
-        // Filtrer les IPs exclues et whitelistées des logs
-        var allExcluded = new HashSet<string>(excludedIps.Concat(whitelistedIps));
-        var filteredLogs = logs.Where(l => !allExcluded.Contains(l.ClientHost)).ToList();
+        // Filtrer les IPs exclues, whitelistées et déjà bannies
+        var allExcluded = new HashSet<string>(excludedIps.Concat(whitelistedIps).Concat(activeBans));
+        var filteredThreats = threats.Where(l => !allExcluded.Contains(l.ClientHost)).ToList();
 
-        if (filteredLogs.Count < 5)
+        if (filteredThreats.Count < 3 && !threatScores.Any(s => s.Score >= 100))
         {
-            _logger.LogDebug("AI Analyst : pas assez de logs après filtrage, analyse reportée");
+            _logger.LogDebug("AI Analyst : pas assez de menaces à analyser, analyse reportée");
             return;
         }
 
         // Construire le résumé compact pour Gemini
-        var prompt = BuildPrompt(filteredLogs, activeBans, whitelistedIps);
+        var prompt = BuildPrompt(filteredThreats, activeBans, whitelistedIps, threatScores);
 
         // Appeler Gemini
         var (response, geminiError) = await CallGeminiAsync(apiKey, prompt, ct);
@@ -112,7 +112,7 @@ public class AiAnalystService : BackgroundService
         {
             db.AiAnalyses.Add(new AiAnalysis
             {
-                LogsAnalyzed = filteredLogs.Count,
+                LogsAnalyzed = filteredThreats.Count,
                 ActionsTaken = 0,
                 Summary = $"Erreur Gemini API : {geminiError}",
                 LogsFromTimestamp = since,
@@ -149,7 +149,7 @@ public class AiAnalystService : BackgroundService
 
         db.AiAnalyses.Add(new AiAnalysis
         {
-            LogsAnalyzed = filteredLogs.Count,
+            LogsAnalyzed = filteredThreats.Count,
             ActionsTaken = actionCount,
             Summary = summary.Length > 4000 ? summary[..4000] : summary,
             LogsFromTimestamp = since,
@@ -157,52 +157,67 @@ public class AiAnalystService : BackgroundService
         });
         await db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("AI Analyst : {LogCount} logs analysés, {Actions} actions", filteredLogs.Count, actionCount);
+        _logger.LogInformation("AI Analyst : {LogCount} logs analysés, {Actions} actions", filteredThreats.Count, actionCount);
     }
 
-    private string BuildPrompt(List<GlobalAccessLog> logs, List<string> activeBans, List<string> whitelistedIps)
+    private string BuildPrompt(List<GlobalAccessLog> threats, List<string> activeBans, List<string> whitelistedIps, List<IpThreatScore> threatScores)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Tu es un analyste SOC (Security Operations Center) pour une infrastructure web.");
         sb.AppendLine("Tu surveilles le trafic Traefik (reverse proxy) de plusieurs sites.");
         sb.AppendLine();
         sb.AppendLine("CONTEXTE :");
-        sb.AppendLine($"- IPs actuellement bannies : {string.Join(", ", activeBans.Take(30))}");
+        sb.AppendLine($"- IPs actuellement bannies ({activeBans.Count}) : {string.Join(", ", activeBans.Take(30))}");
         sb.AppendLine($"- IPs whitelistées (JAMAIS bannir) : {(whitelistedIps.Any() ? string.Join(", ", whitelistedIps) : "aucune")}");
-        sb.AppendLine($"- Période analysée : {logs.Min(l => l.Timestamp):HH:mm:ss} → {logs.Max(l => l.Timestamp):HH:mm:ss}");
-        sb.AppendLine($"- Nombre de logs : {logs.Count}");
-        sb.AppendLine();
-        sb.AppendLine("REGLES DE DECISION :");
-        sb.AppendLine("- BANNIR : scanners de vulnérabilités, scrapers agressifs (rafales de requêtes inhumaines), bots déguisés en navigateurs qui crawlent à haute fréquence");
-        sb.AppendLine("- BANNIR : IPs qui probing des paths sensibles (.env, .git, wp-admin, phpmyadmin, etc.)");
-        sb.AppendLine("- BANNIR : IPs qui tapent directement sur l'IP du serveur (91.134.136.142) au lieu d'un domaine");
-        sb.AppendLine("- NE PAS BANNIR : les bots légitimes (Googlebot, Bingbot, AhrefsBot, ClaudeBot, GPTBot, etc.)");
-        sb.AppendLine("- NE PAS BANNIR : le trafic humain normal même s'il génère beaucoup de requêtes (Next.js prefetch génère des rafales de _rsc normales)");
-        sb.AppendLine("- NE PAS BANNIR : les IPs déjà bannies");
-        sb.AppendLine("- EN CAS DE DOUTE : ne pas bannir. Mieux vaut laisser passer que bloquer un utilisateur légitime.");
-        sb.AppendLine();
-        sb.AppendLine("LOGS (format: timestamp | domaine | IP | methode path | status | userAgent | isBot | botCategory | isSuspicious | threatType) :");
+        sb.AppendLine($"- Seuil auto-ban : 200 points");
         sb.AppendLine();
 
-        // Regrouper par IP pour donner plus de contexte
-        var byIp = logs.GroupBy(l => l.ClientHost).OrderByDescending(g => g.Count());
-
-        foreach (var group in byIp.Take(50)) // Top 50 IPs les plus actives
+        // === SCORES DE MENACE ===
+        sb.AppendLine("SCORES DE MENACE EN COURS (IPs non encore bannies qui accumulent des points) :");
+        if (threatScores.Any())
         {
-            var isBanned = activeBans.Contains(group.Key);
-            sb.AppendLine($"--- IP: {group.Key} ({group.Count()} requêtes){(isBanned ? " [DEJA BANNI]" : "")} ---");
-
-            foreach (var log in group.Take(30)) // Max 30 lignes par IP
+            foreach (var s in threatScores.Where(s => !activeBans.Contains(s.IpAddress)).Take(30))
             {
-                sb.AppendLine($"  {log.Timestamp:HH:mm:ss} | {log.RequestHost} | {log.RequestMethod} {log.RequestPath} | {log.ResponseStatusCode} | {log.BrowserName ?? log.UserAgentBrut[..Math.Min(40, log.UserAgentBrut.Length)]} | bot={log.IsBot} {log.BotCategory} | sus={log.IsSuspicious} {log.ThreatType}");
+                sb.AppendLine($"  {s.IpAddress} — Score: {s.Score}/200 — Première vue: {s.FirstSeen:dd/MM HH:mm} — Dernier hit: {s.LastHit:dd/MM HH:mm:ss}");
+            }
+        }
+        else
+        {
+            sb.AppendLine("  Aucun score en cours.");
+        }
+        sb.AppendLine();
+
+        // === MENACES DETECTEES ===
+        sb.AppendLine($"MENACES DETECTEES ({threats.Count} événements suspects) :");
+        sb.AppendLine();
+
+        var byIp = threats.GroupBy(l => l.ClientHost).OrderByDescending(g => g.Count());
+
+        foreach (var group in byIp.Take(50))
+        {
+            var score = threatScores.FirstOrDefault(s => s.IpAddress == group.Key);
+            var scoreInfo = score != null ? $" [Score: {score.Score}/200]" : "";
+            sb.AppendLine($"--- IP: {group.Key} ({group.Count()} menaces){scoreInfo} ---");
+
+            foreach (var log in group.Take(20))
+            {
+                sb.AppendLine($"  {log.Timestamp:HH:mm:ss} | {log.RequestHost} | {log.RequestMethod} {log.RequestPath} | {log.ResponseStatusCode} | {log.ThreatType} | {log.BrowserName ?? log.UserAgentBrut[..Math.Min(40, log.UserAgentBrut.Length)]}");
             }
 
-            if (group.Count() > 30)
-                sb.AppendLine($"  ... et {group.Count() - 30} autres requêtes");
+            if (group.Count() > 20)
+                sb.AppendLine($"  ... et {group.Count() - 20} autres menaces");
 
             sb.AppendLine();
         }
 
+        sb.AppendLine("REGLES DE DECISION :");
+        sb.AppendLine("- BANNIR : les IPs avec un score >= 100 ET un comportement clairement malveillant (scan, exploit, brute force)");
+        sb.AppendLine("- BANNIR : les IPs qui cumulent plusieurs types de menaces différents");
+        sb.AppendLine("- NE PAS BANNIR : les IPs whitelistées (JAMAIS)");
+        sb.AppendLine("- NE PAS BANNIR : les IPs déjà bannies");
+        sb.AppendLine("- NE PAS BANNIR : les IPs Cloudflare (172.68.x.x, 172.69.x.x, 172.70.x.x, 172.71.x.x, 104.x.x.x, 162.158.x.x) car ce sont des proxies et bannir bloquerait des utilisateurs légitimes");
+        sb.AppendLine("- EN CAS DE DOUTE : ne pas bannir. Mieux vaut laisser passer que bloquer un utilisateur légitime.");
+        sb.AppendLine();
         sb.AppendLine("REPONSE ATTENDUE :");
         sb.AppendLine("Réponds UNIQUEMENT avec un JSON valide, sans markdown, sans commentaire :");
         sb.AppendLine("""
