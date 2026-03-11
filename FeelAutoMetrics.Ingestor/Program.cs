@@ -63,7 +63,8 @@ if (!string.IsNullOrEmpty(apiKey))
     app.Use(async (context, next) =>
     {
         var path = context.Request.Path.Value ?? "";
-        if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+        if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)
+            && !path.Equals("/api/security/check", StringComparison.OrdinalIgnoreCase))
         {
             var providedKey = context.Request.Headers["X-Api-Key"].FirstOrDefault()
                 ?? context.Request.Query["apikey"].FirstOrDefault();
