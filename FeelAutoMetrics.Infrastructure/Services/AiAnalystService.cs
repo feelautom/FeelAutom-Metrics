@@ -107,15 +107,14 @@ public class AiAnalystService : BackgroundService
         var prompt = BuildPrompt(filteredLogs, activeBans);
 
         // Appeler Gemini
-        var response = await CallGeminiAsync(apiKey, prompt, ct);
+        var (response, geminiError) = await CallGeminiAsync(apiKey, prompt, ct);
         if (response == null)
         {
-            // Enregistrer l'échec pour traçabilité
             db.AiAnalyses.Add(new AiAnalysis
             {
                 LogsAnalyzed = filteredLogs.Count,
                 ActionsTaken = 0,
-                Summary = "Erreur : impossible de contacter Gemini API (voir logs pour détails).",
+                Summary = $"Erreur Gemini API : {geminiError}",
                 LogsFromTimestamp = since,
                 LogsToTimestamp = now
             });
@@ -218,9 +217,10 @@ public class AiAnalystService : BackgroundService
         return sb.ToString();
     }
 
-    private async Task<string?> CallGeminiAsync(string apiKey, string prompt, CancellationToken ct)
+    private async Task<(string? Response, string? Error)> CallGeminiAsync(string apiKey, string prompt, CancellationToken ct)
     {
         const int maxRetries = 3;
+        string? lastError = null;
 
         for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
@@ -249,6 +249,7 @@ public class AiAnalystService : BackgroundService
                 if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                 {
                     var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(30 * attempt);
+                    lastError = $"429 Rate Limited (tentative {attempt}/{maxRetries})";
                     _logger.LogWarning("Gemini 429 Rate Limited — retry dans {Seconds}s (tentative {Attempt}/{Max})",
                         retryAfter.TotalSeconds, attempt, maxRetries);
                     await Task.Delay(retryAfter, ct);
@@ -258,8 +259,9 @@ public class AiAnalystService : BackgroundService
                 // 500/503 — erreur serveur, réessayer
                 if ((int)response.StatusCode >= 500)
                 {
-                    _logger.LogWarning("Gemini {Status} Server Error — retry dans {Seconds}s (tentative {Attempt}/{Max})",
-                        response.StatusCode, 10 * attempt, attempt, maxRetries);
+                    lastError = $"HTTP {(int)response.StatusCode} Server Error (tentative {attempt}/{maxRetries})";
+                    _logger.LogWarning("Gemini {Status} Server Error — retry (tentative {Attempt}/{Max})",
+                        response.StatusCode, attempt, maxRetries);
                     await Task.Delay(TimeSpan.FromSeconds(10 * attempt), ct);
                     continue;
                 }
@@ -268,8 +270,9 @@ public class AiAnalystService : BackgroundService
                 if (!response.IsSuccessStatusCode)
                 {
                     var error = await response.Content.ReadAsStringAsync(ct);
-                    _logger.LogError("Gemini API erreur {Status}: {Error}", response.StatusCode, error[..Math.Min(500, error.Length)]);
-                    return null;
+                    lastError = $"HTTP {(int)response.StatusCode} — {error[..Math.Min(500, error.Length)]}";
+                    _logger.LogError("Gemini API erreur {Status}: {Error}", response.StatusCode, lastError);
+                    return (null, lastError);
                 }
 
                 var json = await response.Content.ReadAsStringAsync(ct);
@@ -283,7 +286,7 @@ public class AiAnalystService : BackgroundService
                     .GetString();
 
                 _logger.LogDebug("Gemini réponse : {Response}", text?[..Math.Min(200, text?.Length ?? 0)]);
-                return text;
+                return (text, null);
             }
             catch (TaskCanceledException) when (ct.IsCancellationRequested)
             {
@@ -291,13 +294,14 @@ public class AiAnalystService : BackgroundService
             }
             catch (Exception ex)
             {
+                lastError = $"Exception: {ex.Message}";
                 _logger.LogError(ex, "Erreur appel Gemini API (tentative {Attempt}/{Max})", attempt, maxRetries);
-                if (attempt == maxRetries) return null;
+                if (attempt == maxRetries) return (null, lastError);
                 await Task.Delay(TimeSpan.FromSeconds(5 * attempt), ct);
             }
         }
 
-        return null;
+        return (null, lastError ?? "Échec après 3 tentatives");
     }
 
     private List<AiAction> ParseActions(string response)
