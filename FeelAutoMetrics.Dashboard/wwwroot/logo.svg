@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Outer eye shape -->
+  <path d="M4 24c0 0 8-14 20-14s20 14 20 14-8 14-20 14S4 24 4 24z"
+        fill="none" stroke="#0dcaf0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Iris circle -->
+  <circle cx="24" cy="24" r="8" fill="none" stroke="#0dcaf0" stroke-width="2"/>
+  <!-- Pulse line through the eye -->
+  <polyline points="6,24 16,24 19,16 22,32 25,20 28,28 31,24 42,24"
+            fill="none" stroke="#20c997" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Center dot -->
+  <circle cx="24" cy="24" r="2.5" fill="#0dcaf0"/>
+</svg>

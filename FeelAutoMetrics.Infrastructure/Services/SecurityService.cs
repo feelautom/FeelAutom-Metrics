@@ -19,6 +19,7 @@ public class SecurityService : ISecurityService
     private readonly ILogger<SecurityService> _logger;
     private readonly IConfiguration _config;
     private static readonly ConcurrentDictionary<string, (int Score, DateTimeOffset LastHit)> _threatScores = new();
+    private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _error500Bursts = new();
     private const string BanFilePath = "/app/Security/banned-ips.txt";
 
     // Paths classiques de scan/intrusion
@@ -148,7 +149,29 @@ public class SecurityService : ISecurityService
             points = 2;
         }
 
-        // 8. ThreatScanner bots (déjà détectés par UserAgentService)
+        // 8. Rafale d'erreurs 500 (ex: LeakIX — provoque des crashs en série)
+        if (threatType == null && log.ResponseStatusCode >= 500)
+        {
+            var now500 = DateTimeOffset.UtcNow;
+            var burst = _error500Bursts.AddOrUpdate(log.ClientHost,
+                (1, now500),
+                (_, old) =>
+                {
+                    // Reset la fenêtre si > 60 secondes
+                    if ((now500 - old.WindowStart).TotalSeconds > 60)
+                        return (1, now500);
+                    return (old.Count + 1, old.WindowStart);
+                });
+
+            if (burst.Count >= 5) // 5+ erreurs 500 en 60s = scan agressif
+            {
+                threatType = "Error500Burst";
+                points = 100; // Ban rapide (200 en 2 rafales)
+                _error500Bursts.TryRemove(log.ClientHost, out _);
+            }
+        }
+
+        // 9. ThreatScanner bots (déjà détectés par UserAgentService)
         if (threatType == null && log.IsBot && log.BotCategory == "ThreatScanner")
         {
             threatType = "ThreatBot";
