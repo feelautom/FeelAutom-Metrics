@@ -301,7 +301,14 @@
                                     <div class="card-body py-2">
                                         @if (ipProfileBan != null)
                                         {
-                                            <div><strong>@ipProfileBan.BanCount</strong> ban(s) — Dernier : @ipProfileBan.BannedAt.LocalDateTime.ToString("dd/MM/yy HH:mm")</div>
+                                            var origin = GetBanOrigin(ipProfileBan.Reason);
+                                            <div class="mb-2">
+                                                <span class="badge @origin.Color">
+                                                    <i class="bi @origin.Icon me-1"></i>@origin.Label
+                                                </span>
+                                                <span class="ms-2"><strong>@ipProfileBan.BanCount</strong> ban(s)</span>
+                                            </div>
+                                            <div class="small text-muted">Dernier ban : @ipProfileBan.BannedAt.LocalDateTime.ToString("dd/MM/yy HH:mm")</div>
                                             <div class="small text-muted">Raison : @(ipProfileBan.Reason ?? "-")</div>
                                             @if (ipProfileBan.ExpiresAt != null)
                                             {
@@ -417,6 +424,7 @@
                                 <thead>
                                     <tr>
                                         <th>Adresse IP</th>
+                                        <th>Origine</th>
                                         <th>Récidive</th>
                                         <th>Raison</th>
                                         <th>Durée</th>
@@ -427,10 +435,16 @@
                                 <tbody>
                                     @foreach (var ban in bannedIps)
                                     {
+                                        var origin = GetBanOrigin(ban.Reason);
                                         <tr class="align-middle" style="cursor: pointer;" @onclick="() => OpenIpProfile(ban.IpAddress)">
                                             <td class="font-monospace text-danger fw-bold">
                                                 @ban.IpAddress
                                                 <i class="bi bi-box-arrow-up-right ms-1 small opacity-50"></i>
+                                            </td>
+                                            <td>
+                                                <span class="badge @origin.Color">
+                                                    <i class="bi @origin.Icon me-1"></i>@origin.Label
+                                                </span>
                                             </td>
                                             <td>
                                                 <span class="badge @(ban.BanCount >= 3 ? "bg-danger" : ban.BanCount >= 2 ? "bg-warning text-dark" : "bg-secondary")">
@@ -890,6 +904,14 @@
         "ThreatBot" => "bg-info",
         _ => "bg-secondary"
     };
+
+    private (string Label, string Color, string Icon) GetBanOrigin(string? reason)
+    {
+        if (string.IsNullOrEmpty(reason)) return ("Système", "bg-secondary", "bi-cpu");
+        if (reason.StartsWith("AI:", StringComparison.OrdinalIgnoreCase)) return ("Analyste IA", "bg-primary", "bi-robot");
+        if (reason.StartsWith("Manuel", StringComparison.OrdinalIgnoreCase)) return ("Manuel", "bg-info text-dark", "bi-person-fill");
+        return ("Automatique", "bg-warning text-dark", "bi-shield-shaded");
+    }
 
     private void ToggleAiAccordion(int index)
     {
