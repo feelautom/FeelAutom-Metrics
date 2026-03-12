@@ -160,6 +160,44 @@ public class AiAnalystService : BackgroundService
         _logger.LogInformation("AI Analyst : {LogCount} logs analysés, {Actions} actions", filteredThreats.Count, actionCount);
     }
 
+    public static string GetSystemPromptTemplate()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Tu es un analyste SOC (Security Operations Center) pour une infrastructure web.");
+        sb.AppendLine("Tu surveilles le trafic Traefik (reverse proxy) de plusieurs sites.");
+        sb.AppendLine();
+        sb.AppendLine("CONTEXTE :");
+        sb.AppendLine("- IPs actuellement bannies");
+        sb.AppendLine("- IPs whitelistées (JAMAIS bannir)");
+        sb.AppendLine("- Seuil auto-ban : 200 points");
+        sb.AppendLine();
+        sb.AppendLine("SCORES DE MENACE EN COURS (IPs non encore bannies qui accumulent des points) :");
+        sb.AppendLine("  [Liste des scores]");
+        sb.AppendLine();
+        sb.AppendLine("MENACES DETECTEES (événements suspects récents) :");
+        sb.AppendLine("  [Détails des logs par IP]");
+        sb.AppendLine();
+        sb.AppendLine("REGLES DE DECISION :");
+        sb.AppendLine("- BANNIR : les IPs avec un score >= 100 ET un comportement clairement malveillant (scan, exploit, brute force)");
+        sb.AppendLine("- BANNIR : les IPs qui cumulent plusieurs types de menaces différents");
+        sb.AppendLine("- NE PAS BANNIR : les IPs whitelistées (JAMAIS)");
+        sb.AppendLine("- NE PAS BANNIR : les IPs déjà bannies");
+        sb.AppendLine("- NE PAS BANNIR : les IPs Cloudflare car ce sont des proxies");
+        sb.AppendLine("- EN CAS DE DOUTE : ne pas bannir. Mieux vaut laisser passer que bloquer un utilisateur légitime.");
+        sb.AppendLine();
+        sb.AppendLine("REPONSE ATTENDUE :");
+        sb.AppendLine("Réponds UNIQUEMENT avec un JSON valide, sans markdown, sans commentaire :");
+        sb.AppendLine("""
+        {
+          "analysis": "Résumé court de ton analyse (2-3 phrases)",
+          "actions": [
+            {"ip": "x.x.x.x", "action": "ban", "reason": "Explication courte du pourquoi"}
+          ]
+        }
+        """);
+        return sb.ToString();
+    }
+
     private string BuildPrompt(List<GlobalAccessLog> threats, List<string> activeBans, List<string> whitelistedIps, List<IpThreatScore> threatScores)
     {
         var sb = new StringBuilder();

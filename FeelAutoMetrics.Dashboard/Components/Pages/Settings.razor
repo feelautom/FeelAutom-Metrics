@@ -3,12 +3,56 @@
 @using FeelAutoMetrics.Shared.Models
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@using FeelAutoMetrics.Infrastructure.Services
+@inject IConfiguration Configuration
 @rendermode InteractiveServer
 
 <PageTitle>FeelAuto-Metrics | Paramètres</PageTitle>
 
 <div class="container-fluid py-4">
     <h1 class="h3 text-white mb-4"><i class="bi bi-gear-fill me-2"></i>Paramètres</h1>
+
+    <!-- AI Analyst Section -->
+    <div class="card bg-dark border-secondary text-white shadow mb-4">
+        <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0"><i class="bi bi-robot me-2"></i>Analyste IA (Gemini)</h5>
+                <small class="text-muted">Configuration et instructions de l'analyste SOC intelligent.</small>
+            </div>
+            <div>
+                @if (aiEnabled)
+                {
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Actif</span>
+                }
+                else
+                {
+                    <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Désactivé</span>
+                }
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label class="text-muted small text-uppercase mb-2">Intervalle d'analyse</label>
+                    <div class="h5 text-white">Toutes les @aiInterval minutes</div>
+                </div>
+                <div class="col-md-6 text-end">
+                    <label class="text-muted small text-uppercase mb-2">Modèle utilisé</label>
+                    <div class="h5 text-info">gemini-3.1-pro-preview</div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="text-muted small text-uppercase mb-2">Instructions Système (Prompt)</label>
+                <div class="bg-black rounded p-3 border border-secondary" style="max-height: 400px; overflow-y: auto;">
+                    <pre class="mb-0 text-success small font-monospace" style="white-space: pre-wrap;">@aiPrompt</pre>
+                </div>
+                <small class="text-muted mt-2 d-block">
+                    <i class="bi bi-info-circle me-1"></i>Ce prompt est envoyé à Gemini avec les logs suspects pour décider des bannissements automatiques.
+                </small>
+            </div>
+        </div>
+    </div>
 
     <!-- Excluded IPs -->
     <div class="card bg-dark border-secondary text-white shadow mb-4">
@@ -219,6 +263,11 @@
     private string statusClass = "success";
     private string statusIcon = "bi-check-circle-fill";
 
+    // AI Analyst
+    private bool aiEnabled;
+    private int aiInterval;
+    private string aiPrompt = "";
+
     // DB Stats
     private DbStatsModel? dbStats;
     private bool dbLoading;
@@ -229,6 +278,15 @@
     {
         await LoadData();
         await LoadDbStats();
+        LoadAiSettings();
+    }
+
+    private void LoadAiSettings()
+    {
+        aiEnabled = !string.IsNullOrEmpty(Configuration["AiAnalyst:GeminiApiKey"]);
+        var intervalStr = Configuration["AiAnalyst:IntervalMinutes"];
+        aiInterval = int.TryParse(intervalStr, out var iv) ? iv : 15;
+        aiPrompt = AiAnalystService.GetSystemPromptTemplate();
     }
 
     private async Task LoadData()
