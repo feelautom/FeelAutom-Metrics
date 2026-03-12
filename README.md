@@ -51,20 +51,84 @@ Gestion de la configuration sans redémarrer les services :
 
 ## 🔔 Système d'Événements Métiers
 
-FeelAutom-Metrics n'est pas qu'un analyseur de logs Traefik. Il permet à vos applications externes d'envoyer des événements personnalisés via une API simple.
+FeelAutom-Metrics permet à vos applications externes d'envoyer des événements personnalisés pour une corrélation parfaite entre logs techniques et activités métiers.
 
-### Envoyer un événement (Exemple en cURL) :
+**Endpoint :** `POST https://api-metrics.votre-domaine.com/api/events`  
+**Header requis :** `X-Api-Key: <ta clé API>`
+
+### 🛠️ Exemples d'intégration
+
+#### 1. Via curl
 ```bash
-curl -X POST https://api-metrics.votre-domaine.com/api/events \
-     -H "X-Api-Key: VOTRE_CLE_API" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "category": "Auth",
-       "message": "Nouvel utilisateur inscrit",
-       "metadata": { "plan": "PRO", "source": "referral" }
-     }'
+curl -X POST https://api-metrics.votre-domaine.fr/api/events \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: TON_API_KEY" \
+  -d '{
+    "appName": "votre-site.com",
+    "environment": "Production",
+    "level": "Information",
+    "message": "Nouvel utilisateur inscrit",
+    "category": "Auth",
+    "userId": "user-123",
+    "metadata": {
+      "plan": "premium",
+      "source": "google-ads"
+    }
+  }'
 ```
-Ces événements apparaîtront instantanément dans votre flux et pourront être corrélés avec les logs réseau.
+
+#### 2. Depuis un site Next.js / Node.js
+```javascript
+async function trackEvent(event) {
+  await fetch('https://api-metrics.votre-domaine.fr/api/events', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Api-Key': process.env.METRICS_API_KEY
+    },
+    body: JSON.stringify({
+      appName: 'votre-site.com',
+      environment: process.env.NODE_ENV === 'production' ? 'Production' : 'Development',
+      ...event
+    })
+  });
+}
+
+// Utilisation :
+trackEvent({ level: 'Information', message: 'Inscription réussie', category: 'Auth', userId: 'user-123' });
+```
+
+#### 3. Depuis une application .NET
+```csharp
+using var http = new HttpClient();
+http.DefaultRequestHeaders.Add("X-Api-Key", "TON_API_KEY");
+
+await http.PostAsJsonAsync("https://api-metrics.votre-domaine.fr/api/events", new
+{
+    appName = "votre-site.com",
+    environment = "Production",
+    level = "Information",
+    message = "Commande validée #1234",
+    category = "Order",
+    userId = "client-456",
+    metadata = new Dictionary<string, string> { ["amount"] = "149.99" }
+});
+```
+
+### 📋 Champs disponibles
+
+| Champ | Obligatoire | Description |
+| :--- | :---: | :--- |
+| `appName` | **Oui** | Nom du site/app (ex: t-ia-connect.com) |
+| `environment` | Non | Production par défaut |
+| `level` | Non | Information, Warning, Error, Critical |
+| `message` | **Oui** | Description de l'événement |
+| `category` | Non | Catégorie métier (Auth, Payment, Order...) |
+| `userId` | Non | ID utilisateur concerné |
+| `correlationId` | Non | Pour lier à un request ID Traefik |
+| `metadata` | Non | Objet clé/valeur libre (stocké en JSONB) |
+| `exceptionMessage` | Non | Message d'erreur si level = Error |
+| `stackTrace` | Non | Stack trace si Error |
 
 ---
 

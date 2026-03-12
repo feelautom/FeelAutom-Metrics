@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- Docs: Ajout de la documentation complète d'intégration des événements métiers (Next.js, .NET, curl).
 - Docs: Expansion majeure du README avec description des pages et du système d'événements métiers.
 - Security: Nettoyage des fichiers sensibles et mise à jour du .gitignore avant publication GitHub.
 - Docs: Ajout du README professionnel et de la licence MIT pour publication GitHub.
