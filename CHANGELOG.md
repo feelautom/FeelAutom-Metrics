@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- Fix: Correction de la syntaxe Blazor (texte nu dans bloc @if) empêchant le build Docker.
 - Feature: Refonte de la page Paramètres avec onglets et éditeur de Prompt IA dynamique.
 - Chore: Renommage du projet de FeelAuto-Metrics en FeelAutom-Metrics.
 - Feature: Ajout de la section Analyste IA dans les paramètres avec affichage du Prompt Système.
