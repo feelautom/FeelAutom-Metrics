@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- Docs: Ajout du README professionnel et de la licence MIT pour publication GitHub.
 - Feature: Permettre la définition du modèle Gemini via une variable d'environnement (AI_ANALYST_MODEL).
 - Fix: Transmission des variables d'environnement IA au Dashboard pour l'affichage du statut.
 - Fix: Correction de la syntaxe Blazor (texte nu dans bloc @if) empêchant le build Docker.
