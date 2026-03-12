@@ -19,7 +19,8 @@ public class AiAnalystService : BackgroundService
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _interval;
 
-    private const string GeminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent";
+    private readonly string _geminiModel;
+    private readonly string _geminiUrl;
 
     public AiAnalystService(IServiceProvider services, ILogger<AiAnalystService> logger, IConfiguration config)
     {
@@ -27,6 +28,9 @@ public class AiAnalystService : BackgroundService
         _logger = logger;
         _config = config;
         _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+
+        _geminiModel = config["AiAnalyst:Model"] ?? "gemini-3.1-pro-preview";
+        _geminiUrl = $"https://generativelanguage.googleapis.com/v1beta/models/{_geminiModel}:generateContent";
 
         var intervalStr = config["AiAnalyst:IntervalMinutes"];
         var intervalMinutes = int.TryParse(intervalStr, out var iv) ? iv : 15;
@@ -42,7 +46,7 @@ public class AiAnalystService : BackgroundService
             return;
         }
 
-        _logger.LogInformation("AI Analyst démarré — analyse toutes les {Interval} minutes", _interval.TotalMinutes);
+        _logger.LogInformation("AI Analyst démarré — Modèle: {Model} — Intervalle: {Interval} min", _geminiModel, _interval.TotalMinutes);
 
         // Attendre 2 min après le démarrage pour laisser le système se stabiliser
         await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
@@ -278,7 +282,7 @@ public class AiAnalystService : BackgroundService
                     }
                 };
 
-                var request = new HttpRequestMessage(HttpMethod.Post, $"{GeminiBaseUrl}?key={apiKey}")
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{_geminiUrl}?key={apiKey}")
                 {
                     Content = JsonContent.Create(requestBody)
                 };

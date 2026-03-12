@@ -68,8 +68,9 @@
                     <div class="col-md-4">
                         <div class="bg-black p-3 rounded border border-secondary h-100">
                             <label class="text-muted small text-uppercase fw-bold mb-2">Modèle Actif</label>
-                            <div class="h5 mb-0 text-info">gemini-3.1-pro-preview</div>
+                            <div class="h5 mb-0 text-info">@aiModel</div>
                             <small class="text-muted">Moteur d'intelligence artificielle.</small>
+
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -333,6 +334,7 @@
     // AI Analyst
     private bool aiEnabled;
     private int aiInterval;
+    private string aiModel = "";
     private string aiPrompt = "";
     private bool savingPrompt;
 
@@ -352,6 +354,7 @@
     private async Task LoadAiSettings()
     {
         aiEnabled = !string.IsNullOrEmpty(Configuration["AiAnalyst:GeminiApiKey"]);
+        aiModel = Configuration["AiAnalyst:Model"] ?? "gemini-3.1-pro-preview";
         var intervalStr = Configuration["AiAnalyst:IntervalMinutes"];
         aiInterval = int.TryParse(intervalStr, out var iv) ? iv : 15;
         
