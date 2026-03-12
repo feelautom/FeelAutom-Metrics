@@ -15,6 +15,7 @@ builder.Services.AddDataProtection()
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddHttpClient();
 builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();

@@ -309,8 +309,8 @@
     {
         var from = DateTime.UtcNow.AddDays(-30).ToString("yyyy-MM-dd");
         var to = DateTime.UtcNow.ToString("yyyy-MM-dd");
-        var keyParam = !string.IsNullOrEmpty(ingestorApiKey) ? $"&apikey={ingestorApiKey}" : "";
-        return $"{ingestorBaseUrl}/api/export/{type}?format={format}&from={from}&to={to}{keyParam}";
+        var domainParam = !string.IsNullOrEmpty(filterDomain) ? $"&domain={filterDomain}" : "";
+        return $"/api/proxy/export/{type}?format={format}&from={from}&to={to}{domainParam}";
     }
 
     private async Task OnSearchKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
