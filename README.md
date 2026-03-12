@@ -49,6 +49,18 @@ Le dashboard sera accessible sur `http://localhost:8080` (ou via votre domaine c
 
 ---
 
+## 📸 Aperçu de l'interface
+
+| Dashboard Global | Analyse de Sécurité |
+| :---: | :---: |
+| ![Dashboard](./docs/screenshots/dashboard.png) | ![Security](./docs/screenshots/security.png) |
+
+| Flux de Logs | Statistiques avancées |
+| :---: | :---: |
+| ![Logs](./docs/screenshots/logs.png) | ![Analytics](./docs/screenshots/analytics.png) |
+
+---
+
 ## 🖥️ Exploration du Dashboard
 
 ### 1. Dashboard Global (Accueil)

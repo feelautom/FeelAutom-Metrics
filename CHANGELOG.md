@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- Docs: Réinsertion de la section captures d'écran dans le README.
 - Docs: Réorganisation du README (Installation mise en avant).
 - Docs: Ajout de la documentation complète d'intégration des événements métiers (Next.js, .NET, curl).
 - Docs: Expansion majeure du README avec description des pages et du système d'événements métiers.
