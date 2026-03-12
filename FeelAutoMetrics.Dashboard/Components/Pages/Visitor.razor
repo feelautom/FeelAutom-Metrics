@@ -10,7 +10,7 @@
 
 <div class="container-fluid py-4">
     <!-- Header -->
-    <div class="d-flex align-items-center gap-3 mb-4">
+    <div class="d-flex align-items-center gap-3 mb-2">
         <a href="/logs" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Retour au flux
         </a>
@@ -22,6 +22,26 @@
             <span class="badge bg-danger"><i class="bi bi-slash-circle me-1"></i>Banni</span>
         }
     </div>
+
+    <!-- Robot Suspicion Alert -->
+    @if (isSuspiciousBot)
+    {
+        <div class="alert alert-warning border-warning bg-warning bg-opacity-10 text-warning d-flex align-items-center gap-3 mb-4 shadow-sm">
+            <i class="bi bi-robot fs-2"></i>
+            <div>
+                <h5 class="alert-heading mb-1 fw-bold">Suspicion de Robot détectée</h5>
+                <p class="mb-0 small">
+                    Ce visiteur présente un comportement non-humain : 
+                    <strong>@maxRequestsPerSecond requêtes/sec</strong> détectées à @peakTime. 
+                    Navigation ultra-rapide sur @cleanLogs.Count pages en @FormatTimeDiff(TimeSpan.FromSeconds(totalDurationSeconds)).
+                </p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="mb-4"></div>
+    }
 
     @if (isLoading)
     {
@@ -194,6 +214,10 @@
     private bool isLoading = true;
     private bool isBanned = false;
     private bool showBruit = false;
+    private bool isSuspiciousBot = false;
+    private int maxRequestsPerSecond = 0;
+    private double totalDurationSeconds = 0;
+    private string peakTime = "";
     private List<GlobalAccessLog> allLogs = new();
     private List<GlobalAccessLog> cleanLogs = new();
     private Dictionary<string, int> domains = new();
@@ -233,9 +257,42 @@
 
             // Clean noise
             cleanLogs = allLogs.Where(l => !IsBruit(l)).ToList();
+
+            // Analyse de suspicion de robot
+            AnalyzeRobotBehavior();
         }
 
         isLoading = false;
+    }
+
+    private void AnalyzeRobotBehavior()
+    {
+        if (allLogs.Count < 2) return;
+
+        // 1. Calcul de la durée totale
+        var first = allLogs.Last().Timestamp;
+        var last = allLogs.First().Timestamp;
+        totalDurationSeconds = (last - first).TotalSeconds;
+
+        // 2. Détection du pic de requêtes par seconde
+        var perSecond = allLogs.GroupBy(l => l.Timestamp.ToString("yyyy-MM-dd HH:mm:ss"))
+            .Select(g => new { Time = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .FirstOrDefault();
+
+        if (perSecond != null)
+        {
+            maxRequestsPerSecond = perSecond.Count;
+            peakTime = perSecond.Time.Split(' ')[1];
+        }
+
+        // 3. Critères de suspicion
+        // - Plus de 5 requêtes dans la même seconde
+        // - OU Plus de 20 pages vues en moins de 10 secondes
+        if (maxRequestsPerSecond >= 5 || (cleanLogs.Count > 10 && totalDurationSeconds < 5))
+        {
+            isSuspiciousBot = true;
+        }
     }
 
     private bool IsBruit(GlobalAccessLog log)
