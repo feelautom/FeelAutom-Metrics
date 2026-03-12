@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: always
+    command: postgres -c max_connections=200
+    environment:
+      POSTGRES_DB: feelauto_metrics
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  ingestor:
+    image: feelauto-ingestor:latest
+    restart: always
+    networks:
+      - default
+      - proxy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.feelauto-ingestor.rule=Host(`api-metrics.votre-domaine.com`)"
+      - "traefik.http.routers.feelauto-ingestor.entrypoints=websecure"
+      - "traefik.http.routers.feelauto-ingestor.tls.certresolver=letsencrypt"
+      - "traefik.http.services.feelauto-ingestor.loadbalancer.server.port=8080"
+    environment:
+      TZ: Europe/Paris
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=feelauto_metrics;Username=postgres;Password=${DB_PASSWORD:-postgres}
+      GeoIP__DatabasePath: /app/Data/GeoLite2-City.mmdb
+      Security__ApiKey: ${INVESTIGATOR_API_KEY:-}
+      Security__WhitelistedIps: ${WHITELISTED_IPS:-}
+      AiAnalyst__GeminiApiKey: ${GEMINI_API_KEY:-}
+      AiAnalyst__Model: ${AI_ANALYST_MODEL:-gemini-3.1-pro-preview}
+      AiAnalyst__IntervalMinutes: ${AI_ANALYST_INTERVAL:-15}
+    volumes:
+      - ./geoip_data:/app/Data
+      - ./security:/app/Security
+    depends_on:
+      - postgres
+
+  dashboard:
+    image: feelauto-dashboard:latest
+    restart: always
+    networks:
+      - default
+      - proxy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.feelauto-dashboard.rule=Host(`observability.votre-domaine.com`)"
+      - "traefik.http.routers.feelauto-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.feelauto-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.services.feelauto-dashboard.loadbalancer.server.port=8080"
+    environment:
+      TZ: Europe/Paris
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=feelauto_metrics;Username=postgres;Password=${DB_PASSWORD:-postgres}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-FeelAuto2026!}
+      IngestorBaseUrl: http://ingestor:8080
+      IngestorApiKey: ${INVESTIGATOR_API_KEY:-}
+      AiAnalyst__GeminiApiKey: ${GEMINI_API_KEY:-}
+      AiAnalyst__Model: ${AI_ANALYST_MODEL:-gemini-3.1-pro-preview}
+      AiAnalyst__IntervalMinutes: ${AI_ANALYST_INTERVAL:-15}
+    volumes:
+      - ./keys:/keys
+    depends_on:
+      - postgres
+
+  shipper:
+    image: node:22-alpine
+    restart: always
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /app
+    entrypoint: sh -c "apk add --no-cache docker-cli && npm install && node the-shipper.js"
+    environment:
+      INGESTOR_URL: http://ingestor:8080/api/logs/ingest
+      CONTAINER_NAME: votre-conteneur-traefik
+      API_KEY: ${INVESTIGATOR_API_KEY:-}
+    depends_on:
+      - ingestor
+
+networks:
+  proxy-network:
+    external: true
+
+volumes:
+  postgres_data:
