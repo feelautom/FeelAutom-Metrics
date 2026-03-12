@@ -82,6 +82,16 @@
                 </button>
             </li>
             <li class="nav-item">
+                <button class="nav-link @(activeTab == "quarantine" ? "active text-warning" : "text-muted")"
+                        @onclick='() => activeTab = "quarantine"'>
+                    <i class="bi bi-hourglass-split me-1"></i>Quarantaine
+                    @if (quarantineIps.Any())
+                    {
+                        <span class="badge bg-warning text-dark ms-1">@quarantineIps.Count</span>
+                    }
+                </button>
+            </li>
+            <li class="nav-item">
                 <button class="nav-link @(activeTab == "scores" ? "active text-warning" : "text-muted")"
                         @onclick='() => activeTab = "scores"'>
                     <i class="bi bi-speedometer2 me-1"></i>Scores
@@ -494,6 +504,70 @@
                     }
                 }
 
+                @* ===== TAB: QUARANTAINE ===== *@
+                @if (activeTab == "quarantine")
+                {
+                    <div class="p-3 border-bottom border-secondary bg-warning bg-opacity-10">
+                        <span class="text-warning small">
+                            <i class="bi bi-info-circle-fill me-1"></i>
+                            <strong>Mode Tarpitting actif</strong> : Ces IPs subissent un ralentissement forcé de <strong>15 secondes</strong> sur chaque requête. 
+                            Si leur score atteint 200, elles seront bannies définitivement.
+                        </span>
+                    </div>
+                    @if (quarantineIps.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Adresse IP</th>
+                                        <th>Score Actuel</th>
+                                        <th style="min-width: 200px;">Progression vers Ban</th>
+                                        <th>Dernière Activité</th>
+                                        <th class="text-end">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var s in quarantineIps)
+                                    {
+                                        var pct = (int)(s.Score / 200.0 * 100);
+                                        <tr class="align-middle">
+                                            <td class="font-monospace fw-bold text-warning" style="cursor: pointer;" @onclick="() => ViewIpProfile(s.IpAddress)">
+                                                @s.IpAddress
+                                                <i class="bi bi-box-arrow-up-right ms-1 small opacity-50"></i>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-warning text-dark">@s.Score / 200</span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="progress bg-black flex-grow-1" style="height: 10px;">
+                                                        <div class="progress-bar bg-danger" style="width: @pct%"></div>
+                                                    </div>
+                                                    <small class="text-muted">@pct%</small>
+                                                </div>
+                                            </td>
+                                            <td class="small text-muted">@s.LastHit.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-danger btn-sm" @onclick='() => BanIp(s.IpAddress, "Forcé depuis quarantaine")'>
+                                                    <i class="bi bi-slash-circle me-1"></i>Bannir maintenant
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center text-muted">
+                            <i class="bi bi-wind fs-1 d-block mb-3"></i>
+                            <p>Aucune IP n'est actuellement en quarantaine.</p>
+                        </div>
+                    }
+                }
+
                 @* ===== TAB: SCORES ===== *@
                 @if (activeTab == "scores")
                 {
@@ -697,6 +771,7 @@
     private List<GlobalAccessLog>? threats;
     private List<BannedIp> bannedIps = new();
     private List<IpThreatScore> threatScores = new();
+    private List<IpThreatScore> quarantineIps = new();
     private List<AiAnalysis> aiAnalyses = new();
     private HashSet<string> bannedSet = new();
     private Timer? _refreshTimer;
@@ -831,6 +906,10 @@
             .OrderByDescending(s => s.Score)
             .Take(50)
             .ToListAsync();
+
+        quarantineIps = threatScores
+            .Where(s => s.Score >= 100 && !bannedSet.Contains(s.IpAddress))
+            .ToList();
 
         aiAnalyses = await context.AiAnalyses
             .OrderByDescending(a => a.AnalyzedAt)
