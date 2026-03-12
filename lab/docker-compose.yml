@@ -1,0 +1,103 @@
+services:
+  traefik:
+    image: traefik:v3.1
+    restart: always
+    ports:
+      - "80:80"
+      - "8081:8080" # Dashboard Traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - traefik_logs:/var/log/traefik
+    networks:
+      - lab-network
+
+  postgres:
+    image: postgres:17
+    restart: always
+    environment:
+      POSTGRES_DB: feelauto_metrics
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lab-network
+
+  ingestor:
+    image: feelauto-ingestor:latest
+    restart: always
+    environment:
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=feelauto_metrics;Username=postgres;Password=${DB_PASSWORD:-postgres}
+      Security__ApiKey: ${INVESTIGATOR_API_KEY:-dev-key}
+      AiAnalyst__GeminiApiKey: ${GEMINI_API_KEY:-}
+    networks:
+      - lab-network
+
+  dashboard:
+    image: feelauto-dashboard:latest
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`${DASHBOARD_HOST:-localhost}`)"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
+    environment:
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=feelauto_metrics;Username=postgres;Password=${DB_PASSWORD:-postgres}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-admin}
+      IngestorBaseUrl: http://ingestor:8080
+      IngestorApiKey: ${INVESTIGATOR_API_KEY:-dev-key}
+    networks:
+      - lab-network
+    depends_on:
+      - ingestor
+
+  shipper:
+    image: node:22-alpine
+    restart: always
+    volumes:
+      - traefik_logs:/var/log/traefik:ro
+    working_dir: /app
+    entrypoint: sh -c "npm install axios && node -e \"
+      const fs = require('fs');
+      const axios = require('axios');
+      const logFile = '/var/log/traefik/access.log';
+      console.log('🚀 Shipper Lab démarré sur ' + logFile);
+      fs.watchFile(logFile, (curr, prev) => {
+        const stream = fs.createReadStream(logFile, { start: prev.size });
+        stream.on('data', (chunk) => {
+          const lines = chunk.toString().split('\n').filter(l => l.trim());
+          lines.forEach(line => {
+            axios.post('http://ingestor:8080/api/logs/ingest', JSON.parse(line), {
+              headers: { 'X-Api-Key': '${INVESTIGATOR_API_KEY:-dev-key}' }
+            }).catch(e => console.error('Erreur envoi:', e.message));
+          });
+        });
+      });\""
+    networks:
+      - lab-network
+    depends_on:
+      - ingestor
+
+  # SITE DE TEST (CIBLE)
+  demo-site:
+    image: traefik/whoami
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.demo.rule=Host(`${DEMO_HOST:-site.localhost}`)"
+      - "traefik.http.routers.demo.entrypoints=web"
+      // Middlewares de sécurité FeelAutom
+      - "traefik.http.routers.demo.middlewares=feelautom-auth"
+      - "traefik.http.middlewares.feelautom-auth.forwardauth.address=http://ingestor:8080/api/security/check"
+      - "traefik.http.middlewares.feelautom-auth.forwardauth.trustForwardHeader=true"
+    networks:
+      - lab-network
+
+networks:
+  lab-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  traefik_logs:

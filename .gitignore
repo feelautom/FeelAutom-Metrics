@@ -27,6 +27,7 @@ Thumbs.db
 .env.*
 !.env.example
 docker-compose.yml
+!lab/docker-compose.yml
 appsettings.json
 *.key
 *.pem
