@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- Feature: Ajout d'un environnement 'Lab Demo' complet pour faciliter le test et l'installation via Traefik.
 - UI: Ajout de l'onglet Quarantaine dans le SOC pour visualiser les IPs en cours de ralentissement (Tarpitting).
 - Feature: Implémentation de la Quarantaine (Tarpitting) avec ralentissement de 15s pour les IPs ayant un score entre 100 et 200.
 - Docs: Restauration complète des commentaires techniques dans le SecurityService et harmonisation de la logique de bannissement.
