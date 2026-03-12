@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- UI: Amélioration du titre du parcours visiteur et distinction visuelle du bruit technique.
 - UI: Déplacement de l'alerte de suspicion de robot dans la barre latérale pour libérer de l'espace.
 - Fix: Correction finale de la logique de pagination et réactivité du switch bruit technique.
 - Fix: Correction du bug de pagination et limitation à 6 étapes par page dans le profil visiteur.
