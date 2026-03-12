@@ -29,6 +29,7 @@ cd FeelAutom-Metrics
 
 # 2. Configurer le .env (voir exemple ci-dessous)
 # 3. Lancer
+cp docker-compose.example.yml docker-compose.yml
 docker-compose up -d
 ```
 
