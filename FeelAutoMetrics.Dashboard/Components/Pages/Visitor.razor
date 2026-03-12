@@ -161,12 +161,13 @@
                                 {
                                     var globalIndex = (currentTimelinePage * 6) + index;
                                     var timeDiff = globalIndex < displayLogs.Count - 1 ? (log.Timestamp - displayLogs[globalIndex + 1].Timestamp) : TimeSpan.Zero;
-                                    
+
                                     <div class="timeline-item pb-4 position-relative">
-                                        @if (index < pagedLogs.Count - 1 || (currentTimelinePage + 1) * 10 < displayLogs.Count)
+                                        @if (index < pagedLogs.Count - 1 || (currentTimelinePage + 1) * 6 < displayLogs.Count)
                                         {
                                             <div class="timeline-line position-absolute" style="left: 15px; top: 30px; bottom: 0; width: 2px; background: #333;"></div>
                                         }
+
                                         
                                         <div class="d-flex">
                                             <div class="timeline-dot rounded-circle bg-primary shadow-sm" style="width: 32px; height: 32px; flex-shrink: 0; z-index: 2; display: flex; align-items: center; justify-content: center;">
