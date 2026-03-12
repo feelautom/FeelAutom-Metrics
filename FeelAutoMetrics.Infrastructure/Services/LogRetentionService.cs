@@ -60,11 +60,17 @@ public class LogRetentionService : BackgroundService
             .Where(e => e.Timestamp < cutoff)
             .ExecuteDeleteAsync(cancellationToken);
 
-        if (deletedLogs > 0 || deletedEvents > 0)
+        // Rotation des analyses IA : garder 24h max
+        var aiCutoff = DateTimeOffset.UtcNow.AddDays(-1);
+        var deletedAi = await context.AiAnalyses
+            .Where(a => a.AnalyzedAt < aiCutoff)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        if (deletedLogs > 0 || deletedEvents > 0 || deletedAi > 0)
         {
             _logger.LogInformation(
-                "Retention purge complete: {Logs} logs and {Events} events older than {Days} days deleted.",
-                deletedLogs, deletedEvents, _retentionDays);
+                "Retention purge complete: {Logs} logs, {Events} events, {Ai} AI analyses deleted.",
+                deletedLogs, deletedEvents, deletedAi);
         }
     }
 }

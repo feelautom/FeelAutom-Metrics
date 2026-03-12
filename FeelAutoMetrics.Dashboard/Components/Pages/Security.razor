@@ -156,8 +156,9 @@
                                         <tr class="align-middle @(isBanned ? "opacity-50" : "")">
                                             <td class="small text-muted">@t.Timestamp.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
                                             <td><span class="badge bg-secondary opacity-75">@t.RequestHost</span></td>
-                                            <td class="font-monospace fw-bold @(isBanned ? "text-muted" : "text-danger")">
+                                            <td class="font-monospace fw-bold @(isBanned ? "text-muted" : "text-danger")" style="cursor: pointer;" @onclick="() => ViewIpProfile(t.ClientHost)">
                                                 @t.ClientHost
+                                                <i class="bi bi-box-arrow-up-right ms-1 small opacity-50"></i>
                                                 @if (isBanned)
                                                 {
                                                     <span class="badge bg-danger ms-2">banni</span>
@@ -223,7 +224,193 @@
                 @* ===== TAB: BANS ===== *@
                 @if (activeTab == "bans")
                 {
-                    @if (bannedIps.Any())
+                    @if (selectedIpProfile != null)
+                    {
+                        <!-- Profil IP détaillé -->
+                        <div class="p-3 border-bottom border-secondary d-flex align-items-center gap-2">
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="CloseIpProfile">
+                                <i class="bi bi-arrow-left me-1"></i>Retour
+                            </button>
+                            <h5 class="mb-0 text-danger font-monospace">@selectedIpProfile</h5>
+                            @if (ipProfileBan != null)
+                            {
+                                <span class="badge bg-danger">Banni x@(ipProfileBan.BanCount)</span>
+                            }
+                        </div>
+
+                        <!-- KPIs IP -->
+                        <div class="row g-3 p-3">
+                            <div class="col-md-3">
+                                <div class="card bg-black border-secondary text-white">
+                                    <div class="card-body py-2">
+                                        <div class="text-muted small">Total requêtes</div>
+                                        <div class="h5 mb-0">@ipProfileTotalHits.ToString("N0")</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-black border-danger text-white">
+                                    <div class="card-body py-2">
+                                        <div class="text-muted small">Requêtes suspectes</div>
+                                        <div class="h5 mb-0 text-danger">@ipProfileSuspiciousHits.ToString("N0")</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-black border-secondary text-white">
+                                    <div class="card-body py-2">
+                                        <div class="text-muted small">Première vue</div>
+                                        <div class="h6 mb-0">@(ipProfileFirstSeen?.LocalDateTime.ToString("dd/MM/yy HH:mm") ?? "-")</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-black border-secondary text-white">
+                                    <div class="card-body py-2">
+                                        <div class="text-muted small">Dernière vue</div>
+                                        <div class="h6 mb-0">@(ipProfileLastSeen?.LocalDateTime.ToString("dd/MM/yy HH:mm") ?? "-")</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Infos GeoIP + Ban -->
+                        <div class="row g-3 px-3 pb-3">
+                            <div class="col-md-6">
+                                <div class="card bg-black border-secondary text-white h-100">
+                                    <div class="card-header bg-transparent border-secondary small text-muted">
+                                        <i class="bi bi-geo-alt me-1"></i>Localisation
+                                    </div>
+                                    <div class="card-body py-2">
+                                        @if (ipProfileGeo != null)
+                                        {
+                                            <div>@(ipProfileGeo.CountryName ?? "Inconnu") @(!string.IsNullOrEmpty(ipProfileGeo.CityName) ? $"— {ipProfileGeo.CityName}" : "")</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="text-muted">Non disponible</div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-black border-secondary text-white h-100">
+                                    <div class="card-header bg-transparent border-secondary small text-muted">
+                                        <i class="bi bi-shield-exclamation me-1"></i>Historique des bans
+                                    </div>
+                                    <div class="card-body py-2">
+                                        @if (ipProfileBan != null)
+                                        {
+                                            <div><strong>@ipProfileBan.BanCount</strong> ban(s) — Dernier : @ipProfileBan.BannedAt.LocalDateTime.ToString("dd/MM/yy HH:mm")</div>
+                                            <div class="small text-muted">Raison : @(ipProfileBan.Reason ?? "-")</div>
+                                            @if (ipProfileBan.ExpiresAt != null)
+                                            {
+                                                <div class="small text-muted">Expire : @ipProfileBan.ExpiresAt.Value.LocalDateTime.ToString("dd/MM/yy HH:mm")</div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div class="text-muted">Aucun ban enregistré</div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Domaines ciblés -->
+                        @if (ipProfileDomains.Any())
+                        {
+                            <div class="px-3 pb-3">
+                                <div class="card bg-black border-secondary text-white">
+                                    <div class="card-header bg-transparent border-secondary small text-muted">
+                                        <i class="bi bi-globe me-1"></i>Domaines ciblés
+                                    </div>
+                                    <div class="card-body py-2 d-flex flex-wrap gap-2">
+                                        @foreach (var d in ipProfileDomains)
+                                        {
+                                            <span class="badge bg-secondary">@d.Domain <span class="text-warning">(@d.Count)</span></span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Types de menaces -->
+                        @if (ipProfileThreatTypes.Any())
+                        {
+                            <div class="px-3 pb-3">
+                                <div class="card bg-black border-secondary text-white">
+                                    <div class="card-header bg-transparent border-secondary small text-muted">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Types de menaces
+                                    </div>
+                                    <div class="card-body py-2 d-flex flex-wrap gap-2">
+                                        @foreach (var t in ipProfileThreatTypes)
+                                        {
+                                            <span class="badge @GetThreatBadgeClass(t.Type)">@t.Type <span class="opacity-75">(@t.Count)</span></span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Dernières requêtes suspectes -->
+                        @if (ipProfileLogs.Any())
+                        {
+                            <div class="px-3 pb-3">
+                                <div class="card bg-black border-secondary text-white">
+                                    <div class="card-header bg-transparent border-secondary small text-muted">
+                                        <i class="bi bi-list-ul me-1"></i>Dernières requêtes suspectes (@ipProfileSuspiciousHits total)
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-dark table-hover mb-0 small">
+                                            <thead>
+                                                <tr>
+                                                    <th>Date</th>
+                                                    <th>Domaine</th>
+                                                    <th>Méthode</th>
+                                                    <th>Path</th>
+                                                    <th>Status</th>
+                                                    <th>Type</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var log in ipProfileLogs)
+                                                {
+                                                    <tr>
+                                                        <td class="text-muted">@log.Timestamp.LocalDateTime.ToString("dd/MM HH:mm:ss")</td>
+                                                        <td><span class="badge bg-secondary opacity-75">@log.RequestHost</span></td>
+                                                        <td class="text-info">@log.RequestMethod</td>
+                                                        <td class="text-truncate" style="max-width: 350px;"><code class="text-warning bg-transparent p-0">@log.RequestPath</code></td>
+                                                        <td>
+                                                            <span class="badge @(log.ResponseStatusCode >= 400 ? "bg-danger" : "bg-success")">@log.ResponseStatusCode</span>
+                                                        </td>
+                                                        <td><span class="badge @GetThreatBadgeClass(log.ThreatType)">@(log.ThreatType ?? "-")</span></td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Action -->
+                        <div class="p-3 d-flex justify-content-end">
+                            @if (ipProfileBan?.IsActive == true)
+                            {
+                                <button class="btn btn-outline-success" @onclick="() => UnbanIp(selectedIpProfile!)">
+                                    <i class="bi bi-unlock-fill me-1"></i>Débannir
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-danger" @onclick="() => BanFromProfile()">
+                                    <i class="bi bi-slash-circle me-1"></i>Bannir
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (bannedIps.Any())
                     {
                         <div class="table-responsive">
                             <table class="table table-dark table-hover mb-0">
@@ -240,8 +427,11 @@
                                 <tbody>
                                     @foreach (var ban in bannedIps)
                                     {
-                                        <tr class="align-middle">
-                                            <td class="font-monospace text-danger fw-bold">@ban.IpAddress</td>
+                                        <tr class="align-middle" style="cursor: pointer;" @onclick="() => OpenIpProfile(ban.IpAddress)">
+                                            <td class="font-monospace text-danger fw-bold">
+                                                @ban.IpAddress
+                                                <i class="bi bi-box-arrow-up-right ms-1 small opacity-50"></i>
+                                            </td>
                                             <td>
                                                 <span class="badge @(ban.BanCount >= 3 ? "bg-danger" : ban.BanCount >= 2 ? "bg-warning text-dark" : "bg-secondary")">
                                                     x@(ban.BanCount)
@@ -270,7 +460,7 @@
                                                     <span>-</span>
                                                 }
                                             </td>
-                                            <td class="text-end">
+                                            <td class="text-end" @onclick:stopPropagation="true">
                                                 <button class="btn btn-outline-success btn-sm" @onclick="() => UnbanIp(ban.IpAddress)">
                                                     <i class="bi bi-unlock-fill me-1"></i>Débannir
                                                 </button>
@@ -347,9 +537,12 @@
                     @if (aiAnalyses.Any())
                     {
                         <div>
-                            @foreach (var (analysis, index) in aiAnalyses.Select((a, i) => (a, i)))
+                            @{
+                                var aiPageItems = aiAnalyses.Skip((aiCurrentPage - 1) * aiPageSize).Take(aiPageSize).ToList();
+                            }
+                            @foreach (var (analysis, index) in aiPageItems.Select((a, i) => (a, i)))
                             {
-                                var idx = index;
+                                var idx = (aiCurrentPage - 1) * aiPageSize + index;
                                 var isOpen = expandedAiIndex == idx;
                                 <div class="border-bottom border-secondary">
                                     <button class="btn btn-link w-100 text-start text-decoration-none py-2 px-3 d-flex align-items-center"
@@ -380,6 +573,37 @@
                                 </div>
                             }
                         </div>
+
+                        <!-- Pagination AI -->
+                        @if (aiTotalPages > 1)
+                        {
+                            <div class="d-flex justify-content-between align-items-center p-3 border-top border-secondary">
+                                <div class="text-muted small">
+                                    Page @aiCurrentPage / @aiTotalPages — @aiAnalyses.Count analyses
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-outline-secondary btn-sm" disabled="@(aiCurrentPage <= 1)" @onclick="() => AiGoToPage(1)">
+                                        <i class="bi bi-chevron-double-left"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" disabled="@(aiCurrentPage <= 1)" @onclick="() => AiGoToPage(aiCurrentPage - 1)">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </button>
+                                    @for (int i = aiStartPage; i <= aiEndPage; i++)
+                                    {
+                                        var p = i;
+                                        <button class="btn btn-sm @(p == aiCurrentPage ? "btn-primary" : "btn-outline-secondary")" @onclick="() => AiGoToPage(p)">
+                                            @p
+                                        </button>
+                                    }
+                                    <button class="btn btn-outline-secondary btn-sm" disabled="@(aiCurrentPage >= aiTotalPages)" @onclick="() => AiGoToPage(aiCurrentPage + 1)">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" disabled="@(aiCurrentPage >= aiTotalPages)" @onclick="() => AiGoToPage(aiTotalPages)">
+                                        <i class="bi bi-chevron-double-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        }
                     }
                     else
                     {
@@ -470,6 +694,13 @@
     private string aiInterval = "15";
     private string? aiStatusError;
     private int? expandedAiIndex = 0;
+
+    // Pagination AI
+    private int aiCurrentPage = 1;
+    private int aiPageSize = 10;
+    private int aiTotalPages => (int)Math.Ceiling((double)aiAnalyses.Count / aiPageSize);
+    private int aiStartPage => Math.Max(1, aiCurrentPage - 2);
+    private int aiEndPage => Math.Min(aiTotalPages, aiStartPage + 4);
 
     // Pagination
     private int currentPage = 1;
@@ -579,7 +810,7 @@
 
         aiAnalyses = await context.AiAnalyses
             .OrderByDescending(a => a.AnalyzedAt)
-            .Take(20)
+            .Take(100)
             .ToListAsync();
     }
 
@@ -663,6 +894,92 @@
     private void ToggleAiAccordion(int index)
     {
         expandedAiIndex = expandedAiIndex == index ? null : index;
+    }
+
+    private void AiGoToPage(int page)
+    {
+        aiCurrentPage = Math.Max(1, Math.Min(page, aiTotalPages));
+        expandedAiIndex = null;
+    }
+
+    // IP Profile
+    private string? selectedIpProfile;
+    private BannedIp? ipProfileBan;
+    private int ipProfileTotalHits;
+    private int ipProfileSuspiciousHits;
+    private DateTimeOffset? ipProfileFirstSeen;
+    private DateTimeOffset? ipProfileLastSeen;
+    private GlobalAccessLog? ipProfileGeo;
+    private List<(string Domain, int Count)> ipProfileDomains = new();
+    private List<(string Type, int Count)> ipProfileThreatTypes = new();
+    private List<GlobalAccessLog> ipProfileLogs = new();
+
+    private async Task OpenIpProfile(string ip)
+    {
+        selectedIpProfile = ip;
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        ipProfileBan = await context.BannedIps.FirstOrDefaultAsync(b => b.IpAddress == ip);
+
+        ipProfileTotalHits = await context.GlobalAccessLogs.CountAsync(l => l.ClientHost == ip);
+        ipProfileSuspiciousHits = await context.GlobalAccessLogs.CountAsync(l => l.ClientHost == ip && l.IsSuspicious);
+
+        ipProfileFirstSeen = await context.GlobalAccessLogs
+            .Where(l => l.ClientHost == ip)
+            .OrderBy(l => l.Timestamp)
+            .Select(l => (DateTimeOffset?)l.Timestamp)
+            .FirstOrDefaultAsync();
+
+        ipProfileLastSeen = await context.GlobalAccessLogs
+            .Where(l => l.ClientHost == ip)
+            .OrderByDescending(l => l.Timestamp)
+            .Select(l => (DateTimeOffset?)l.Timestamp)
+            .FirstOrDefaultAsync();
+
+        ipProfileGeo = await context.GlobalAccessLogs
+            .Where(l => l.ClientHost == ip && l.CountryName != null)
+            .OrderByDescending(l => l.Timestamp)
+            .FirstOrDefaultAsync();
+
+        ipProfileDomains = await context.GlobalAccessLogs
+            .Where(l => l.ClientHost == ip && l.IsSuspicious)
+            .GroupBy(l => l.RequestHost)
+            .Select(g => new { Domain = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(20)
+            .ToListAsync()
+            .ContinueWith(t => t.Result.Select(x => (x.Domain, x.Count)).ToList());
+
+        ipProfileThreatTypes = await context.GlobalAccessLogs
+            .Where(l => l.ClientHost == ip && l.IsSuspicious && l.ThreatType != null)
+            .GroupBy(l => l.ThreatType!)
+            .Select(g => new { Type = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .ToListAsync()
+            .ContinueWith(t => t.Result.Select(x => (x.Type, x.Count)).ToList());
+
+        ipProfileLogs = await context.GlobalAccessLogs
+            .Where(l => l.ClientHost == ip && l.IsSuspicious)
+            .OrderByDescending(l => l.Timestamp)
+            .Take(50)
+            .ToListAsync();
+    }
+
+    private void CloseIpProfile()
+    {
+        selectedIpProfile = null;
+    }
+
+    private async Task BanFromProfile()
+    {
+        if (selectedIpProfile != null)
+            await BanIp(selectedIpProfile, "Manuel depuis profil");
+    }
+
+    private async Task ViewIpProfile(string ip)
+    {
+        activeTab = "bans";
+        await OpenIpProfile(ip);
     }
 
     private async Task DoSearch() { currentPage = 1; await LoadData(); }
