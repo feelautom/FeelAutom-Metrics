@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- Fix: Correction du bug de pagination et limitation à 6 étapes par page dans le profil visiteur.
 - UI: Limitation de la timeline visiteur à 6 étapes par page.
 - UI: Rétablissement de la timeline verticale avec pagination par tranches de 10 (défilement horizontal).
 - UI: Refonte du parcours visiteur en slider horizontal avec historique détaillé en tableau.
