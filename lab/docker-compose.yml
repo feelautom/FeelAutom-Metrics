@@ -25,6 +25,9 @@ services:
       - lab-network
 
   ingestor:
+    build:
+      context: ..
+      dockerfile: FeelAutoMetrics.Ingestor/Dockerfile
     image: feelauto-ingestor:latest
     restart: always
     environment:
@@ -35,6 +38,9 @@ services:
       - lab-network
 
   dashboard:
+    build:
+      context: ..
+      dockerfile: FeelAutoMetrics.Dashboard/Dockerfile
     image: feelauto-dashboard:latest
     restart: always
     labels:
