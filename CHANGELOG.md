@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- UI: Rendre la timeline du profil visiteur défilable verticalement.
 - Feature: Ajout de la vue Profil Visiteur avec nettoyage du bruit technique et timeline de navigation.
 - Final: Ajout des captures d'écran et mise à jour finale du README.
 - Docs: Restauration des descriptions détaillées des pages du Dashboard dans le README.
