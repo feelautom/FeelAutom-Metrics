@@ -234,16 +234,18 @@ public class SecurityService : ISecurityService
 
         // 10. Rafale de requêtes (scraping/crawling agressif)
         // Seuil élevé pour éviter les faux positifs Next.js (prefetch RSC = ~15 req/burst)
-        // On exclut les assets statiques du compteur
+        // On exclut les assets statiques et les appels de prefetch du compteur
         {
             var isStaticAsset = pathLower.StartsWith("/_next/") ||
                                 pathLower.StartsWith("/favicon") ||
+                                pathLower.Contains("/_rsc=") || // Next.js RSC Prefetch
                                 pathLower.EndsWith(".css") ||
                                 pathLower.EndsWith(".js") ||
                                 pathLower.EndsWith(".png") ||
                                 pathLower.EndsWith(".jpg") ||
                                 pathLower.EndsWith(".svg") ||
-                                pathLower.EndsWith(".woff2");
+                                pathLower.EndsWith(".woff2") ||
+                                pathLower.EndsWith(".ico");
 
             if (!isStaticAsset)
             {
