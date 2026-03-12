@@ -1,4 +1,5 @@
 @page "/security"
+@page "/security/{PreSelectedIp}"
 @using FeelAutoMetrics.Infrastructure.Data
 @using FeelAutoMetrics.Shared.Models
 @using Microsoft.EntityFrameworkCore
@@ -724,10 +725,19 @@
     private int startPage => Math.Max(1, currentPage - 2);
     private int endPage => Math.Min(totalPages, startPage + 4);
 
+    [Parameter] public string? PreSelectedIp { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
         await CheckAiStatus();
+
+        if (!string.IsNullOrEmpty(PreSelectedIp))
+        {
+            activeTab = "bans";
+            await OpenIpProfile(PreSelectedIp);
+        }
+
         _refreshTimer = new Timer(async _ =>
         {
             await LoadData();

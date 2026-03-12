@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- Feature: Redirection directe du Profil Visiteur vers le Profil SOC spécifique pour les IPs bannies.
 - UI: Rendre le badge banni cliquable pour renvoyer vers la page de sécurité.
 - UI: Amélioration du titre du parcours visiteur et distinction visuelle du bruit technique.
 - UI: Déplacement de l'alerte de suspicion de robot dans la barre latérale pour libérer de l'espace.
