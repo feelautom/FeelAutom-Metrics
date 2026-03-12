@@ -64,22 +64,29 @@ services:
     volumes:
       - traefik_logs:/var/log/traefik:ro
     working_dir: /app
-    entrypoint: sh -c "npm install axios && node -e \"
-      const fs = require('fs');
-      const axios = require('axios');
-      const logFile = '/var/log/traefik/access.log';
-      console.log('🚀 Shipper Lab démarré sur ' + logFile);
-      fs.watchFile(logFile, (curr, prev) => {
-        const stream = fs.createReadStream(logFile, { start: prev.size });
-        stream.on('data', (chunk) => {
-          const lines = chunk.toString().split('\n').filter(l => l.trim());
-          lines.forEach(line => {
-            axios.post('http://ingestor:8080/api/logs/ingest', JSON.parse(line), {
-              headers: { 'X-Api-Key': '${INVESTIGATOR_API_KEY:-dev-key}' }
-            }).catch(e => console.error('Erreur envoi:', e.message));
+    entrypoint: 
+      - sh
+      - -c
+      - |
+        npm install axios && node -e "
+        const fs = require('fs');
+        const axios = require('axios');
+        const logFile = '/var/log/traefik/access.log';
+        console.log('🚀 Shipper Lab démarré sur ' + logFile);
+        if (!fs.existsSync(logFile)) fs.writeFileSync(logFile, '');
+        fs.watchFile(logFile, (curr, prev) => {
+          const stream = fs.createReadStream(logFile, { start: prev.size });
+          stream.on('data', (chunk) => {
+            const lines = chunk.toString().split('\n').filter(l => l.trim());
+            lines.forEach(line => {
+              try {
+                axios.post('http://ingestor:8080/api/logs/ingest', JSON.parse(line), {
+                  headers: { 'X-Api-Key': '${INVESTIGATOR_API_KEY:-dev-key}' }
+                });
+              } catch(e) {}
+            });
           });
-        });
-      });\""
+        });"
     networks:
       - lab-network
     depends_on:
@@ -93,7 +100,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.demo.rule=Host(`${DEMO_HOST:-site.localhost}`)"
       - "traefik.http.routers.demo.entrypoints=web"
-      // Middlewares de sécurité FeelAutom
+      # Middlewares de sécurité FeelAutom
       - "traefik.http.routers.demo.middlewares=feelautom-auth"
       - "traefik.http.middlewares.feelautom-auth.forwardauth.address=http://ingestor:8080/api/security/check"
       - "traefik.http.middlewares.feelautom-auth.forwardauth.trustForwardHeader=true"
