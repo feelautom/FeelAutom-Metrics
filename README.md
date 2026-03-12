@@ -28,9 +28,17 @@ git clone https://github.com/feelautom/FeelAutom-Metrics.git
 cd FeelAutom-Metrics
 
 # 2. Configurer le .env (voir exemple ci-dessous)
-# 3. Lancer
+
+# 3. Base de données GeoIP (Requis pour la localisation)
+Le projet utilise MaxMind GeoLite2. Pour des raisons de licence, la base n'est pas incluse :
+1. Créez un compte gratuit sur [MaxMind](https://www.maxmind.com/en/geolite2/signup).
+2. Téléchargez le fichier `GeoLite2-City.mmdb`.
+3. Placez-le dans le dossier `./geoip_data/` à la racine du projet.
+
+# 4. Lancer
 cp docker-compose.example.yml docker-compose.yml
 docker-compose up -d
+
 ```
 
 ### Exemple de fichier `.env` :
