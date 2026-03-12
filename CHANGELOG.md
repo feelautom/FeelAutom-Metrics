@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- UI: Refonte du parcours visiteur en slider horizontal avec historique détaillé en tableau.
 - Feature: Ajout d'un bandeau de suspicion de robot basé sur l'analyse de fréquence des requêtes.
 - UI: Rendre la timeline du profil visiteur défilable verticalement.
 - Feature: Ajout de la vue Profil Visiteur avec nettoyage du bruit technique et timeline de navigation.
