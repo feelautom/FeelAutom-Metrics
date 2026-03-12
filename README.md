@@ -5,96 +5,95 @@
 [![.NET 9](https://img.shields.io/badge/.NET-9.0-512bd4.svg)](https://dotnet.microsoft.com/download)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ed.svg)](https://www.docker.com/)
 
-**FeelAutom-Metrics** est une plateforme d'observabilité et de sécurité intelligente conçue pour surveiller les infrastructures web basées sur **Traefik**. Elle ingère, enrichit et analyse les logs d'accès en temps réel pour offrir une visibilité complète et une protection automatisée via IA.
+**FeelAutom-Metrics** est une plateforme d'observabilité et de sécurité "all-in-one" conçue pour les infrastructures modernes basées sur **Traefik**. Elle combine monitoring technique, analyse de sécurité par IA et suivi d'événements métiers dans une interface unique et performante.
 
 ---
 
 ## 🚀 Fonctionnalités Clés
 
-- **📈 Dashboard Temps Réel** : Visualisez le trafic global, les erreurs, la latence et les volumes de données via une interface moderne (Blazor Server).
-- **🤖 Analyste SOC IA (Gemini)** : Un agent intelligent analyse les comportements suspects et décide des bannissements en fonction de règles de sécurité personnalisables.
-- **🛡️ Sécurité Avancée** :
-    - Détection automatique de menaces (Scanners, Path Discovery, Brute Force).
-    - Système de scoring d'IP.
-    - Whitelist dynamique (via UI) et statique (via Env).
-    - Protection contre le "Request Burst" (adapté aux comportements Next.js).
-- **🌍 Enrichissement de Données** : Géolocalisation des IPs (MaxMind) et parsing avancé des User-Agents.
-- **📁 Export de Données** : Exportez vos logs et événements au format CSV ou JSON directement depuis l'interface.
-- **🐳 Docker Native** : Déploiement ultra-rapide via Docker Compose.
+- **📈 Monitoring Holistique** : Ne vous contentez pas de voir les erreurs 404. Suivez la latence, le volume de données et la répartition géographique de votre trafic.
+- **🤖 Analyste SOC IA (Gemini)** : Un expert en sécurité virtuel qui surveille vos logs 24/7. Il identifie les comportements complexes (scans furtifs, exploitation de failles) et prend des décisions de bannissement justifiées.
+- **🛡️ Bouclier Actif** : Système de scoring d'IP intelligent capable de distinguer un utilisateur réel (même avec du prefetching Next.js intensif) d'un bot malveillant.
+- **🎯 Événements Métiers** : Centralisez vos logs techniques et vos succès commerciaux (inscriptions, ventes, erreurs critiques applicatives) au même endroit.
+- **🌍 Intelligence Géographique** : Géolocalisation précise via MaxMind pour comprendre d'où vient votre audience.
+- **🔐 Privacy First** : Auto-hébergé, vos logs restent sur votre infrastructure.
 
 ---
 
-## 📸 Screenshots
+## 🖥️ Exploration du Dashboard
 
-*(Placeholders pour vos futurs screenshots)*
+L'interface est découpée en plusieurs sections spécialisées pour une gestion efficace de votre infrastructure :
 
-| Dashboard Global | Analyse de Sécurité |
-| :---: | :---: |
-| ![Dashboard](./docs/screenshots/dashboard.png) | ![Security](./docs/screenshots/security.png) |
+### 1. Dashboard Global (Accueil)
+La tour de contrôle. Elle offre une vue d'ensemble immédiate des indicateurs clés de performance (KPIs) sur les dernières 24 heures : nombre total de requêtes, taux d'erreur, trafic bot vs humain, et le top des IPs les plus actives.
+
+### 2. Flux de Logs (Temps Réel)
+Un flux "live" de tout ce qui transite par votre reverse-proxy Traefik.
+- **Filtrage puissant** : Filtrez par domaine, chemin, ou statut HTTP.
+- **Exports** : Boutons dédiés pour exporter vos données filtrées en **CSV** ou **JSON** pour des analyses externes.
+
+### 3. Analyses Avancées
+Une vue granulaire par domaine pour comprendre les performances de chaque micro-service. Visualisez la latence moyenne, les codes d'erreurs les plus fréquents et la typologie des terminaux utilisés (Mobile vs Desktop).
+
+### 4. Sécurité & SOC
+L'espace dédié à la protection de votre serveur.
+- **Bans Actifs** : Liste des IPs actuellement bloquées avec raison et date d'expiration.
+- **Rapports IA** : Consultez le journal des analyses effectuées par l'analyste SOC IA, avec le résumé de ses décisions.
+- **Scores de Menace** : Surveillez les IPs suspectes avant même qu'elles ne soient bannies.
+
+### 5. Paramètres Système
+Gestion de la configuration sans redémarrer les services :
+- **Whitelist Dynamique** : Excluez vos propres IPs pour ne pas fausser les statistiques.
+- **Éditeur de Prompt IA** : Personnalisez les instructions envoyées à Gemini. Dictez-lui sa politique de sécurité (soyez plus ou moins sévère selon vos besoins).
+- **Maintenance BDD** : Statistiques de stockage et outils de purge pour contrôler la rétention des données.
+
+---
+
+## 🔔 Système d'Événements Métiers
+
+FeelAutom-Metrics n'est pas qu'un analyseur de logs Traefik. Il permet à vos applications externes d'envoyer des événements personnalisés via une API simple.
+
+### Envoyer un événement (Exemple en cURL) :
+```bash
+curl -X POST https://api-metrics.votre-domaine.com/api/events \
+     -H "X-Api-Key: VOTRE_CLE_API" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "category": "Auth",
+       "message": "Nouvel utilisateur inscrit",
+       "metadata": { "plan": "PRO", "source": "referral" }
+     }'
+```
+Ces événements apparaîtront instantanément dans votre flux et pourront être corrélés avec les logs réseau.
 
 ---
 
 ## 🏗️ Architecture
 
-Le projet est découpé en micro-services :
-
-1.  **The Shipper (Node.js)** : Un agent léger qui surveille les conteneurs Traefik et "expédie" les logs vers l'ingesteur.
-2.  **Ingestor (.NET 9 Web API)** : Le coeur du système. Reçoit les logs, les enrichit (GeoIP), calcule les scores de menace et gère les bannissements.
-3.  **Dashboard (.NET 9 Blazor Server)** : L'interface d'administration et de visualisation.
-4.  **PostgreSQL** : Stockage persistant des logs, événements et configurations.
+1.  **The Shipper (Node.js)** : Agent ultra-léger qui "tail" les logs Docker de Traefik et les expédie vers l'ingesteur.
+2.  **Ingestor (.NET 9)** : API haute performance chargée de l'enrichissement (GeoIP, UA Parsing) et du calcul de sécurité.
+3.  **Dashboard (Blazor Server)** : Interface interactive riche utilisant SignalR pour les mises à jour en temps réel.
+4.  **PostgreSQL** : Base de données robuste pour le stockage des logs et des métriques.
 
 ---
 
-## 🛠️ Installation & Déploiement
+## 🛠️ Installation
 
-### Pré-requis
-- Docker & Docker Compose
-- Une clé API Google Gemini (optionnel, pour l'IA)
+```bash
+# 1. Cloner le projet
+git clone https://github.com/feelautom/FeelAutom-Metrics.git
+cd FeelAutom-Metrics
 
-### Configuration rapide
-1. Clonez le dépôt :
-   ```bash
-   git clone https://github.com/votre-compte/FeelAutom-Metrics.git
-   cd FeelAutom-Metrics
-   ```
-
-2. Créez un fichier `.env` à la racine :
-   ```bash
-   # Sécurité
-   INVESTIGATOR_API_KEY="votre_cle_secrete_partagee"
-   AUTH_PASSWORD="mot_de_passe_dashboard"
-   WHITELISTED_IPS="votre_ip_publique"
-
-   # IA Analyste (Optionnel)
-   GEMINI_API_KEY="votre_cle_gemini"
-   AI_ANALYST_MODEL="gemini-3.1-pro-preview"
-   AI_ANALYST_INTERVAL=15
-   ```
-
-3. Lancez l'infrastructure :
-   ```bash
-   docker-compose up -d
-   ```
-
-Le dashboard sera accessible sur `http://localhost:8080` (ou via votre domaine configuré dans Traefik).
-
----
-
-## ⚙️ Personnalisation du Prompt IA
-
-Vous pouvez désormais éditer les instructions de l'analyste SOC directement depuis l'onglet **Paramètres > Analyste IA**. Utilisez des variables comme `{{THREATS}}`, `{{BANS}}` ou `{{SCORES}}` pour injecter les données réelles dans vos instructions personnalisées.
+# 2. Configurer le .env (voir exemple dans le README)
+# 3. Lancer
+docker-compose up -d
+```
 
 ---
 
 ## 📄 Licence
 
 Distribué sous la licence **MIT**. Voir `LICENSE` pour plus d'informations.
-
----
-
-## 🤝 Contribution
-
-Les contributions sont les bienvenues ! N'hésitez pas à ouvrir une Issue ou une Pull Request pour améliorer le projet.
 
 ---
 *Développé avec ❤️ par FeelAutom.*
