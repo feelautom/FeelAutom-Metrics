@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- Docs: Ajout du guide d'urgence pour le débannissement manuel par SSH.
 - Fix: Correction des exports (CSV/JSON) en utilisant un proxy interne au Dashboard.
 - Fix: Intégration de la table ExcludedIps dans le SecurityService pour éviter les bannissements accidentels.
 
