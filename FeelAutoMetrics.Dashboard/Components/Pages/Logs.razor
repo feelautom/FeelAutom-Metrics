@@ -132,12 +132,17 @@
                             </td>
                             <td class="text-end fw-bold text-info">@log.DurationMs<small class="text-muted ms-1">ms</small></td>
                             <td class="text-end">
-                                @if (!isBanned)
-                                {
-                                    <button class="btn btn-outline-danger btn-sm py-0 px-1" title="Bannir cette IP" @onclick="() => BanIp(log.ClientHost)">
-                                        <i class="bi bi-slash-circle"></i>
-                                    </button>
-                                }
+                                <div class="d-flex justify-content-end gap-1">
+                                    <a href="/visitor/@log.ClientHost" class="btn btn-outline-info btn-sm py-0 px-1" title="Voir le parcours visiteur">
+                                        <i class="bi bi-eye-fill"></i>
+                                    </a>
+                                    @if (!isBanned)
+                                    {
+                                        <button class="btn btn-outline-danger btn-sm py-0 px-1" title="Bannir cette IP" @onclick="() => BanIp(log.ClientHost)">
+                                            <i class="bi bi-slash-circle"></i>
+                                        </button>
+                                    }
+                                </div>
                             </td>
                         </tr>
                     }

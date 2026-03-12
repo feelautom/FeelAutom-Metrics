@@ -1,0 +1,282 @@
+@page "/visitor/{IpAddress}"
+@using FeelAutoMetrics.Infrastructure.Data
+@using FeelAutoMetrics.Shared.Models
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>FeelAutom-Metrics | Profil Visiteur @IpAddress</PageTitle>
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <a href="/logs" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Retour au flux
+        </a>
+        <h1 class="h3 text-white mb-0">
+            <i class="bi bi-person-badge me-2 text-primary"></i>Profil Visiteur : <span class="font-monospace text-info">@IpAddress</span>
+        </h1>
+        @if (isBanned)
+        {
+            <span class="badge bg-danger"><i class="bi bi-slash-circle me-1"></i>Banni</span>
+        }
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2 text-muted">Analyse du parcours utilisateur...</div>
+        </div>
+    }
+    else if (allLogs.Count == 0)
+    {
+        <div class="alert alert-dark border-secondary text-center py-5">
+            <i class="bi bi-search me-2"></i>Aucun log trouvé pour cette adresse IP.
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <!-- Sidebar: Stats & Info -->
+            <div class="col-md-3">
+                <div class="card bg-dark border-secondary text-white shadow mb-4">
+                    <div class="card-header bg-transparent border-secondary py-3">
+                        <h5 class="mb-0 small text-uppercase text-muted fw-bold">Informations Clés</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="text-muted small text-uppercase d-block mb-1">Localisation</label>
+                            <div class="h6">
+                                @if (!string.IsNullOrEmpty(geoInfo?.CountryCode))
+                                {
+                                    <span class="fw-bold text-primary">@geoInfo.CountryCode</span><span class="mx-1">-</span>@geoInfo.CityName
+                                }
+                                else
+                                {
+                                    <span class="text-muted italic">Inconnue</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="text-muted small text-uppercase d-block mb-1">Dernier Appareil</label>
+                            <div class="h6">
+                                <i class="bi @(lastLog?.DeviceFamily == "Mobile" ? "bi-smartphone" : "bi-laptop") me-1"></i>
+                                @lastLog?.BrowserName @lastLog?.BrowserVersion
+                            </div>
+                            <div class="small text-muted">OS: @lastLog?.OsName</div>
+                        </div>
+                        <hr class="border-secondary" />
+                        <div class="row g-2 text-center">
+                            <div class="col-6">
+                                <div class="bg-black p-2 rounded border border-secondary">
+                                    <div class="text-muted small">Requêtes</div>
+                                    <div class="h5 mb-0">@allLogs.Count</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="bg-black p-2 rounded border border-secondary">
+                                    <div class="text-muted small">Pages Vues</div>
+                                    <div class="h5 mb-0 text-success">@cleanLogs.Count</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card bg-dark border-secondary text-white shadow">
+                    <div class="card-header bg-transparent border-secondary py-3">
+                        <h5 class="mb-0 small text-uppercase text-muted fw-bold">Domaines Visités</h5>
+                    </div>
+                    <div class="list-group list-group-flush bg-transparent">
+                        @foreach (var domain in domains)
+                        {
+                            <div class="list-group-item bg-transparent border-secondary text-white d-flex justify-content-between align-items-center">
+                                <span class="text-truncate small" title="@domain.Key">@domain.Key</span>
+                                <span class="badge bg-secondary rounded-pill">@domain.Value</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeline: Navigation Path -->
+            <div class="col-md-9">
+                <div class="card bg-dark border-secondary text-white shadow">
+                    <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-signpost-split me-2 text-primary"></i>Parcours de Navigation (Timeline)</h5>
+                        <div class="form-check form-switch small">
+                            <input class="form-check-input" type="checkbox" id="showBruit" @bind="showBruit">
+                            <label class="form-check-label text-muted" for="showBruit">Afficher le bruit technique</label>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @{
+                            var displayLogs = showBruit ? allLogs : cleanLogs;
+                        }
+                        
+                        <div class="timeline p-4">
+                            @if (displayLogs.Count == 0)
+                            {
+                                <div class="text-center text-muted py-4">Aucune page vue détectée dans ce parcours.</div>
+                            }
+                            else
+                            {
+                                @foreach (var (log, index) in displayLogs.Select((l, i) => (l, i)))
+                                {
+                                    var timeDiff = index > 0 ? (displayLogs[index-1].Timestamp - log.Timestamp) : TimeSpan.Zero;
+                                    
+                                    <div class="timeline-item pb-4 position-relative">
+                                        @if (index < displayLogs.Count - 1)
+                                        {
+                                            <div class="timeline-line position-absolute" style="left: 15px; top: 30px; bottom: 0; width: 2px; background: #333;"></div>
+                                        }
+                                        
+                                        <div class="d-flex">
+                                            <div class="timeline-dot rounded-circle bg-primary shadow-sm" style="width: 32px; height: 32px; flex-shrink: 0; z-index: 2; display: flex; align-items: center; justify-content: center;">
+                                                <i class="bi @(GetIconForLog(log)) text-white small"></i>
+                                            </div>
+                                            
+                                            <div class="ms-3 w-100">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div>
+                                                        <span class="badge bg-secondary opacity-75 mb-1">@log.RequestHost</span>
+                                                        <h6 class="mb-1 @(log.ResponseStatusCode >= 400 ? "text-danger" : "text-white")">
+                                                            @log.RequestMethod @log.RequestPath
+                                                        </h6>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <div class="small text-white">@log.Timestamp.LocalDateTime.ToString("HH:mm:ss")</div>
+                                                        <div class="small text-muted">@log.Timestamp.LocalDateTime.ToString("dd MMM yyyy")</div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="d-flex align-items-center gap-2 mt-1">
+                                                    <span class="badge @GetStatusClass(log.ResponseStatusCode) btn-sm">@log.ResponseStatusCode</span>
+                                                    <span class="text-muted small"><i class="bi bi-clock me-1"></i>@log.DurationMs ms</span>
+                                                    @if (timeDiff.TotalSeconds > 1)
+                                                    {
+                                                        <span class="text-info small ms-auto bg-info bg-opacity-10 px-2 rounded">
+                                                            <i class="bi bi-hourglass-split me-1"></i>Pause de @FormatTimeDiff(timeDiff)
+                                                        </span>
+                                                    }
+                                                </div>
+                                                
+                                                @if (showBruit && IsBruit(log))
+                                                {
+                                                    <div class="mt-2 p-2 bg-black bg-opacity-50 rounded border border-secondary border-opacity-25 small text-muted italic">
+                                                        <i class="bi bi-gear me-1"></i>Appel technique (Asset/Prefetch)
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .timeline-item:last-child .timeline-line { display: none; }
+    .bg-black { background-color: #080808 !important; }
+    .italic { font-style: italic; }
+</style>
+
+@code {
+    [Parameter] public string IpAddress { get; set; } = "";
+
+    private bool isLoading = true;
+    private bool isBanned = false;
+    private bool showBruit = false;
+    private List<GlobalAccessLog> allLogs = new();
+    private List<GlobalAccessLog> cleanLogs = new();
+    private Dictionary<string, int> domains = new();
+    private GlobalAccessLog? lastLog;
+    private GlobalAccessLog? geoInfo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVisitorData();
+    }
+
+    private async Task LoadVisitorData()
+    {
+        isLoading = true;
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        // Check ban status
+        isBanned = await context.BannedIps.AnyAsync(b => b.IpAddress == IpAddress && b.IsActive);
+
+        // Load all logs for this IP (last 500)
+        allLogs = await context.GlobalAccessLogs
+            .Where(l => l.ClientHost == IpAddress)
+            .OrderByDescending(l => l.Timestamp)
+            .Take(500)
+            .ToListAsync();
+
+        if (allLogs.Count > 0)
+        {
+            lastLog = allLogs.First();
+            geoInfo = allLogs.FirstOrDefault(l => !string.IsNullOrEmpty(l.CountryCode));
+            
+            // Filter domains
+            domains = allLogs.GroupBy(l => l.RequestHost)
+                .Select(g => new { Host = g.Key, Count = g.Count() })
+                .OrderByDescending(x => x.Count)
+                .ToDictionary(x => x.Host, x => x.Count);
+
+            // Clean noise
+            cleanLogs = allLogs.Where(l => !IsBruit(l)).ToList();
+        }
+
+        isLoading = false;
+    }
+
+    private bool IsBruit(GlobalAccessLog log)
+    {
+        var path = log.RequestPath.ToLower();
+        return path.Contains("/_next/") || 
+               path.Contains("/_rsc=") || 
+               path.EndsWith(".js") || 
+               path.EndsWith(".css") || 
+               path.EndsWith(".png") || 
+               path.EndsWith(".jpg") || 
+               path.EndsWith(".jpeg") || 
+               path.EndsWith(".svg") || 
+               path.EndsWith(".woff2") || 
+               path.EndsWith(".ico") || 
+               path.Contains("/favicon") ||
+               path.Contains("/api/logs/ingest");
+    }
+
+    private string GetIconForLog(GlobalAccessLog log)
+    {
+        if (log.ResponseStatusCode >= 500) return "bi-bug-fill";
+        if (log.ResponseStatusCode >= 400) return "bi-exclamation-octagon";
+        if (log.RequestMethod == "POST") return "bi-send-fill";
+        if (IsBruit(log)) return "bi-gear";
+        return "bi-file-earmark-text";
+    }
+
+    private string GetStatusClass(int status) => status switch
+    {
+        >= 200 and < 300 => "bg-success",
+        >= 300 and < 400 => "bg-info",
+        >= 400 and < 500 => "bg-warning",
+        >= 500 => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string FormatTimeDiff(TimeSpan diff)
+    {
+        if (diff.TotalMinutes >= 60) return $"{(int)diff.TotalHours}h";
+        if (diff.TotalMinutes >= 1) return $"{(int)diff.TotalMinutes}m";
+        return $"{(int)diff.TotalSeconds}s";
+    }
+}
