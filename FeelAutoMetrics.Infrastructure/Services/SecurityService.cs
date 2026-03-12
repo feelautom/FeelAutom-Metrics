@@ -21,40 +21,26 @@ public class SecurityService : ISecurityService
     private static readonly ConcurrentDictionary<string, (int Score, DateTimeOffset LastHit)> _threatScores = new();
     private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _error500Bursts = new();
     private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _requestBursts = new();
-    // Plus de sync fichier iptables — le ban se fait au niveau applicatif (Traefik/Ingestor)
 
-    // Paths classiques de scan/intrusion
     private static readonly string[] ThreatPaths =
     [
-        // WordPress / CMS
         "/wp-admin", "/wp-login", "/wp-content", "/wp-includes", "/xmlrpc.php", "/wp-json",
-        // Config & secrets
         "/.env", "/.git", "/.svn", "/.htaccess", "/.htpasswd", "/web.config",
         "/appsettings", "/.aws", "/.docker", "/.ssh",
-        // Admin panels
         "/phpmyadmin", "/pma", "/adminer", "/cpanel",
-        // Shell & exploit
         "/shell", "/cmd", "/eval", "/exec", "/cgi-bin",
-        // System files
         "/etc/passwd", "/etc/shadow", "/win.ini", "/boot.ini",
-        // Dev tools
         "/.vscode", "/.idea", "/.DS_Store",
-        // API probing
         "/actuator", "/debug", "/trace", "/swagger",
-        // Common vuln paths (pas /vendor seul, trop de FP avec assets bundlés)
         "/vendor/autoload", "/node_modules", "/backup", "/dump",
         "/telescope", "/horizon", "/elfinder", "/filemanager",
         "/solr", "/jenkins", "/struts", "/console",
-        // Log4Shell, Spring4Shell
         "/${jndi", "/spring",
-        // Upload probing (paths exacts, pas /uploads/fichier.ext qui est légitime sur un CMS)
         "/fileupload", "/file-upload", "/uploadfile",
         "/api/storage", "/api/blob", "/api/media",
-        // REST settings probing
         "/rest/settings", "/api/batch/upload", "/api/bulk-upload"
     ];
 
-    // Extensions suspectes
     private static readonly string[] SuspiciousExtensions =
     [
         ".php", ".asp", ".aspx", ".jsp", ".cgi", ".pl",
@@ -99,7 +85,6 @@ public class SecurityService : ISecurityService
         }
     }
 
-    // Ranges Cloudflare — ne jamais bannir (ce sont des proxies, bannir = bloquer des utilisateurs légitimes)
     private static readonly string[] CloudflareRanges =
     [
         "172.68.", "172.69.", "172.70.", "172.71.",
@@ -123,7 +108,6 @@ public class SecurityService : ISecurityService
             return true;
         if (IsCloudflareIp(ip)) return true;
 
-        // Check in-memory cache from ExcludedIps table
         if (_excludedIpsCache.ContainsKey(ip)) return true;
 
         var allowedIps = _config["Security:WhitelistedIps"];
@@ -139,7 +123,6 @@ public class SecurityService : ISecurityService
         string? threatType = null;
         int points = 0;
 
-        // 1. Threat path matching (scan de vulnérabilités)
         var pathLower = log.RequestPath.ToLowerInvariant();
         foreach (var pattern in ThreatPaths)
         {
@@ -151,15 +134,12 @@ public class SecurityService : ISecurityService
             }
         }
 
-        // 2. Scan sur IP directe (RequestHost = IP au lieu d'un domaine)
-        // 50pts = ban après ~4 requêtes (compromis entre sécurité et faux positifs)
         if (threatType == null && IsIpAddress(log.RequestHost))
         {
             threatType = "DirectIpScan";
             points = 50;
         }
 
-        // 3. Extensions suspectes (.php, .sql, .bak sur un site .NET)
         if (threatType == null)
         {
             foreach (var ext in SuspiciousExtensions)
@@ -173,14 +153,12 @@ public class SecurityService : ISecurityService
             }
         }
 
-        // 4. Path traversal
         if (threatType == null && (log.RequestPath.Contains("../") || log.RequestPath.Contains("..\\")))
         {
             threatType = "PathTraversal";
             points = 50;
         }
 
-        // 5. SQL injection patterns
         if (threatType == null && (pathLower.Contains("union+select") || pathLower.Contains("' or ") ||
             pathLower.Contains("1=1") || pathLower.Contains("drop+table")))
         {
@@ -188,7 +166,6 @@ public class SecurityService : ISecurityService
             points = 50;
         }
 
-        // 6. XSS patterns
         if (threatType == null && (pathLower.Contains("<script") || pathLower.Contains("javascript:") ||
             pathLower.Contains("onerror=")))
         {
@@ -196,14 +173,12 @@ public class SecurityService : ISecurityService
             points = 50;
         }
 
-        // 7. 404 scoring (rafales de 404 = scan)
         if (threatType == null && log.ResponseStatusCode == 404)
         {
             threatType = "NotFound";
             points = 2;
         }
 
-        // 8. Rafale d'erreurs 500 (ex: LeakIX — provoque des crashs en série)
         if (threatType == null && log.ResponseStatusCode >= 500)
         {
             var now500 = DateTimeOffset.UtcNow;
@@ -211,34 +186,29 @@ public class SecurityService : ISecurityService
                 (1, now500),
                 (_, old) =>
                 {
-                    // Reset la fenêtre si > 60 secondes
                     if ((now500 - old.WindowStart).TotalSeconds > 60)
                         return (1, now500);
                     return (old.Count + 1, old.WindowStart);
                 });
 
-            if (burst.Count >= 5) // 5+ erreurs 500 en 60s = scan agressif
+            if (burst.Count >= 5)
             {
                 threatType = "Error500Burst";
-                points = 100; // Ban rapide (200 en 2 rafales)
+                points = 100;
                 _error500Bursts.TryRemove(log.ClientHost, out _);
             }
         }
 
-        // 9. ThreatScanner bots (déjà détectés par UserAgentService)
         if (threatType == null && log.IsBot && log.BotCategory == "ThreatScanner")
         {
             threatType = "ThreatBot";
             points = 20;
         }
 
-        // 10. Rafale de requêtes (scraping/crawling agressif)
-        // Seuil élevé pour éviter les faux positifs Next.js (prefetch RSC = ~15 req/burst)
-        // On exclut les assets statiques et les appels de prefetch du compteur
         {
             var isStaticAsset = pathLower.StartsWith("/_next/") ||
                                 pathLower.StartsWith("/favicon") ||
-                                pathLower.Contains("/_rsc=") || // Next.js RSC Prefetch
+                                pathLower.Contains("/_rsc=") ||
                                 pathLower.EndsWith(".css") ||
                                 pathLower.EndsWith(".js") ||
                                 pathLower.EndsWith(".png") ||
@@ -262,13 +232,12 @@ public class SecurityService : ISecurityService
                 if (reqBurst.Count >= 60 && threatType == null)
                 {
                     threatType = "RequestBurst";
-                    points = 100; // Ban après 2 rafales (200pts)
+                    points = 100;
                     _requestBursts.TryRemove(log.ClientHost, out _);
                 }
             }
         }
 
-        // Appliquer le flag IsSuspicious pour les détections directes (hors 404 simples)
         if (threatType != null && threatType != "NotFound")
         {
             log.IsSuspicious = true;
@@ -280,7 +249,6 @@ public class SecurityService : ISecurityService
             }
         }
 
-        // Reporter la menace au système de scoring
         if (points > 0)
         {
             await ReportThreatAsync(log.ClientHost, points, $"{threatType}: {log.RequestPath}");
@@ -291,7 +259,6 @@ public class SecurityService : ISecurityService
     {
         var now = DateTimeOffset.UtcNow;
 
-        // Restauration depuis BDD si absent de la mémoire (redémarrage)
         if (!_threatScores.ContainsKey(ip))
         {
             try
@@ -301,10 +268,9 @@ public class SecurityService : ISecurityService
                 if (dbScore != null)
                     _threatScores.TryAdd(ip, (dbScore.Score, dbScore.LastHit));
             }
-            catch { /* Best effort */ }
+            catch { }
         }
 
-        // Multiplicateur récidive
         int banCount = 0;
         try
         {
@@ -312,11 +278,10 @@ public class SecurityService : ISecurityService
             var ban = await dbBan.BannedIps.AsNoTracking().FirstOrDefaultAsync(b => b.IpAddress == ip);
             banCount = ban?.BanCount ?? 0;
         }
-        catch { /* Best effort */ }
+        catch { }
 
         int multiplier = Math.Max(1, banCount * 2);
 
-        // Récidivistes 5+ : ban instantané
         if (banCount >= 5)
         {
             points = 200;
@@ -326,12 +291,10 @@ public class SecurityService : ISecurityService
             points *= multiplier;
         }
 
-        // Accumulation permanente
         var entry = _threatScores.AddOrUpdate(ip,
             (points, now),
             (key, old) => (old.Score + points, now));
 
-        // Persistance BDD (fire-and-forget)
         _ = Task.Run(async () =>
         {
             try
@@ -355,10 +318,9 @@ public class SecurityService : ISecurityService
                 }
                 await db.SaveChangesAsync();
             }
-            catch { /* Best effort */ }
+            catch { }
         });
 
-        // Auto-ban à 200 points
         if (entry.Score >= 200)
         {
             await AutoBanAsync(ip, reason + $" (Score: {entry.Score})");
@@ -375,44 +337,43 @@ public class SecurityService : ISecurityService
 
             if (existing != null)
             {
-                if (existing.IsActive) return; // Déjà banni
+                if (existing.IsActive) return;
 
+                var now = DateTimeOffset.UtcNow;
                 existing.BanCount++;
                 existing.IsActive = true;
                 existing.Reason = reason;
-                existing.BannedAt = DateTimeOffset.UtcNow;
+                existing.BannedAt = now;
                 existing.ExpiresAt = existing.BanCount switch
                 {
-                    1 => DateTimeOffset.UtcNow.AddDays(1),
-                    2 => DateTimeOffset.UtcNow.AddDays(7),
-                    _ => DateTimeOffset.UtcNow.AddDays(30)
+                    1 => now.AddDays(1),
+                    2 => now.AddDays(7),
+                    _ => now.AddDays(30)
                 };
             }
             else
             {
+                var now = DateTimeOffset.UtcNow;
                 db.BannedIps.Add(new BannedIp
                 {
                     IpAddress = ip,
                     Reason = reason,
-                    BannedAt = DateTimeOffset.UtcNow,
-                    ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+                    BannedAt = now,
+                    ExpiresAt = now.AddDays(1),
                     BanCount = 1,
                     IsActive = true
                 });
             }
 
             await db.SaveChangesAsync();
-
             _logger.LogWarning("AUTO-BAN: {IP} — {Reason}", ip, reason);
 
-            // Reset le score après ban
             var scoreEntry = await db.IpThreatScores.FindAsync(ip);
             if (scoreEntry != null)
             {
                 db.IpThreatScores.Remove(scoreEntry);
                 await db.SaveChangesAsync();
             }
-
         }
         catch (Exception ex)
         {

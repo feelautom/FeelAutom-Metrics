@@ -401,25 +401,27 @@ public class AiAnalystService : BackgroundService
         {
             if (existing.IsActive) return;
 
+            var now = DateTimeOffset.UtcNow;
             existing.BanCount++;
             existing.IsActive = true;
             existing.Reason = $"AI: {reason}";
-            existing.BannedAt = DateTimeOffset.UtcNow;
+            existing.BannedAt = now;
             existing.ExpiresAt = existing.BanCount switch
             {
-                1 => DateTimeOffset.UtcNow.AddDays(1),
-                2 => DateTimeOffset.UtcNow.AddDays(7),
-                _ => DateTimeOffset.UtcNow.AddDays(30)
+                1 => now.AddDays(1),
+                2 => now.AddDays(7),
+                _ => now.AddDays(30)
             };
         }
         else
         {
+            var now = DateTimeOffset.UtcNow;
             db.BannedIps.Add(new BannedIp
             {
                 IpAddress = ip,
                 Reason = $"AI: {reason}",
-                BannedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+                BannedAt = now,
+                ExpiresAt = now.AddDays(1),
                 BanCount = 1,
                 IsActive = true
             });

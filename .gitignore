@@ -33,3 +33,4 @@ appsettings.json
 *.ppk
 security/
 keys/
+deploy.ps1
