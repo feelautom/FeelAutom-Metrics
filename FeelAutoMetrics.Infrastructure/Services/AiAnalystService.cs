@@ -128,7 +128,7 @@ public class AiAnalystService : BackgroundService
 
         foreach (var action in actions)
         {
-            if (allExcluded.Contains(action.Ip) || whitelistedIps.Contains(action.Ip))
+            if (allExcluded.Contains(action.Ip) || whitelistedIps.Contains(action.Ip) || SecurityService.IsCloudflareIp(action.Ip))
             {
                 _logger.LogWarning("AI Analyst a tenté d'agir sur une IP protégée {IP}, ignoré", action.Ip);
                 continue;

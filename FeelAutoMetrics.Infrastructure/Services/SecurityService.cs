@@ -69,10 +69,29 @@ public class SecurityService : ISecurityService
         _config = config;
     }
 
+    // Ranges Cloudflare — ne jamais bannir (ce sont des proxies, bannir = bloquer des utilisateurs légitimes)
+    private static readonly string[] CloudflareRanges =
+    [
+        "172.68.", "172.69.", "172.70.", "172.71.",
+        "172.64.", "172.65.", "172.66.", "172.67.",
+        "104.16.", "104.17.", "104.18.", "104.19.", "104.20.",
+        "104.21.", "104.22.", "104.23.", "104.24.", "104.25.",
+        "162.158.", "141.101.", "108.162.", "190.93.",
+        "188.114.", "197.234.", "198.41.", "103.21.",
+        "103.22.", "103.31."
+    ];
+
+    public static bool IsCloudflareIp(string ip)
+    {
+        if (string.IsNullOrEmpty(ip)) return false;
+        return CloudflareRanges.Any(r => ip.StartsWith(r));
+    }
+
     public bool IsWhitelisted(string ip)
     {
         if (ip is "127.0.0.1" or "::1" || ip.StartsWith("172.17.") || ip.StartsWith("172.18."))
             return true;
+        if (IsCloudflareIp(ip)) return true;
         var allowedIps = _config["Security:WhitelistedIps"];
         if (string.IsNullOrEmpty(allowedIps)) return false;
         return allowedIps.Split(',').Select(i => i.Trim()).Contains(ip);
