@@ -28,6 +28,7 @@ services:
     build:
       context: ..
       dockerfile: FeelAutoMetrics.Ingestor/Dockerfile
+      network: host
     image: feelauto-ingestor:latest
     restart: always
     environment:
@@ -41,6 +42,7 @@ services:
     build:
       context: ..
       dockerfile: FeelAutoMetrics.Dashboard/Dockerfile
+      network: host
     image: feelauto-dashboard:latest
     restart: always
     labels:
