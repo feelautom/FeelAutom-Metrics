@@ -62,7 +62,7 @@ Le dashboard sera accessible sur `http://localhost:8080` (ou via votre domaine c
 
 | Dashboard Global | Analyse de Sécurité |
 | :---: | :---: |
-| ![Dashboard](./docs/screenshots/dashboard.png) | ![Security](./docs/screenshots/security_soc.png) |
+| ![Dashboard](./screenshots/dashboard.png) | ![Security](./screenshots/security_soc.png) |
 
 ---
 
