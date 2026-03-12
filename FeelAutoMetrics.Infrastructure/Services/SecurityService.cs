@@ -62,11 +62,41 @@ public class SecurityService : ISecurityService
         ".zip", ".tar", ".gz", ".rar", ".7z", ".config"
     ];
 
+    private static readonly ConcurrentDictionary<string, byte> _excludedIpsCache = new();
+    private static DateTimeOffset _lastExcludedCacheRefresh = DateTimeOffset.MinValue;
+    private static readonly object _excludedLock = new();
+
     public SecurityService(IDbContextFactory<AppDbContext> dbFactory, ILogger<SecurityService> logger, IConfiguration config)
     {
         _dbFactory = dbFactory;
         _logger = logger;
         _config = config;
+    }
+
+    private async Task EnsureExcludedCacheAsync()
+    {
+        if (DateTimeOffset.UtcNow - _lastExcludedCacheRefresh < TimeSpan.FromMinutes(5)) return;
+
+        lock (_excludedLock)
+        {
+            if (DateTimeOffset.UtcNow - _lastExcludedCacheRefresh < TimeSpan.FromMinutes(5)) return;
+        }
+
+        try
+        {
+            using var db = await _dbFactory.CreateDbContextAsync();
+            var ips = await db.ExcludedIps.Select(e => e.IpAddress).ToListAsync();
+            
+            _excludedIpsCache.Clear();
+            foreach (var ip in ips) _excludedIpsCache.TryAdd(ip, 0);
+            
+            _lastExcludedCacheRefresh = DateTimeOffset.UtcNow;
+            _logger.LogInformation("Security cache: {Count} excluded IPs loaded.", ips.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error refreshing excluded IPs cache.");
+        }
     }
 
     // Ranges Cloudflare — ne jamais bannir (ce sont des proxies, bannir = bloquer des utilisateurs légitimes)
@@ -92,6 +122,10 @@ public class SecurityService : ISecurityService
         if (ip is "127.0.0.1" or "::1" || ip.StartsWith("172.17.") || ip.StartsWith("172.18."))
             return true;
         if (IsCloudflareIp(ip)) return true;
+
+        // Check in-memory cache from ExcludedIps table
+        if (_excludedIpsCache.ContainsKey(ip)) return true;
+
         var allowedIps = _config["Security:WhitelistedIps"];
         if (string.IsNullOrEmpty(allowedIps)) return false;
         return allowedIps.Split(',').Select(i => i.Trim()).Contains(ip);
@@ -99,6 +133,7 @@ public class SecurityService : ISecurityService
 
     public async Task AnalyzeLogAsync(GlobalAccessLog log)
     {
+        await EnsureExcludedCacheAsync();
         if (IsWhitelisted(log.ClientHost)) return;
 
         string? threatType = null;
