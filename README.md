@@ -67,16 +67,24 @@ Le dashboard sera accessible sur `http://localhost:8080` (ou via votre domaine c
 La tour de contrôle. Elle offre une vue d'ensemble immédiate des indicateurs clés de performance (KPIs) : nombre total de requêtes, taux d'erreur, trafic bot vs humain, et le top des IPs les plus actives.
 
 ### 2. Flux de Logs (Temps Réel)
-Un flux "live" de tout ce qui transite par votre reverse-proxy Traefik avec filtrage puissant et exports **CSV** / **JSON**.
+Un flux "live" de tout ce qui transite par votre reverse-proxy Traefik.
+- **Filtrage puissant** : Filtrez par domaine, chemin, ou statut HTTP.
+- **Exports** : Boutons dédiés pour exporter vos données filtrées en **CSV** ou **JSON** pour des analyses externes.
 
 ### 3. Analyses Avancées
-Une vue granulaire par domaine pour comprendre les performances de chaque micro-service (latence, erreurs, terminaux).
+Une vue granulaire par domaine pour comprendre les performances de chaque micro-service. Visualisez la latence moyenne, les codes d'erreurs les plus fréquents et la typologie des terminaux utilisés (Mobile vs Desktop).
 
 ### 4. Sécurité & SOC
-L'espace dédié à la protection : liste des bans actifs, rapports d'analyse IA et scores de menace en cours.
+L'espace dédié à la protection de votre serveur.
+- **Bans Actifs** : Liste des IPs actuellement bloquées avec raison et date d'expiration.
+- **Rapports IA** : Consultez le journal des analyses effectuées par l'analyste SOC IA, avec le résumé de ses décisions.
+- **Scores de Menace** : Surveillez les IPs suspectes avant même qu'elles ne soient bannies.
 
 ### 5. Paramètres Système
-Gestion de la whitelist, édition dynamique du **Prompt IA** et maintenance de la base de données.
+Gestion de la configuration sans redémarrer les services :
+- **Whitelist Dynamique** : Excluez vos propres IPs pour ne pas fausser les statistiques.
+- **Éditeur de Prompt IA** : Personnalisez les instructions envoyées à Gemini. Dictez-lui sa politique de sécurité (soyez plus ou moins sévère selon vos besoins).
+- **Maintenance BDD** : Statistiques de stockage et outils de purge pour contrôler la rétention des données.
 
 ---
 
@@ -165,10 +173,10 @@ await http.PostAsJsonAsync("https://api-metrics.votre-domaine.fr/api/events", ne
 
 ## 🏗️ Architecture
 
-1.  **The Shipper (Node.js)** : Agent ultra-léger qui "tail" les logs Docker de Traefik.
-2.  **Ingestor (.NET 9)** : API haute performance (Enrichissement GeoIP, Sécurité).
-3.  **Dashboard (Blazor Server)** : Interface interactive riche (SignalR).
-4.  **PostgreSQL 17** : Stockage persistant (JSONB pour les métadonnées).
+1.  **The Shipper (Node.js)** : Agent ultra-léger qui "tail" les logs Docker de Traefik et les expédie vers l'ingesteur.
+2.  **Ingestor (.NET 9)** : API haute performance chargée de l'enrichissement (GeoIP, UA Parsing) et du calcul de sécurité.
+3.  **Dashboard (Blazor Server)** : Interface interactive riche utilisant SignalR pour les mises à jour en temps réel.
+4.  **PostgreSQL 17** : Base de données robuste pour le stockage des logs et des métriques.
 
 ---
 

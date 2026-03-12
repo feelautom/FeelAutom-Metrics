@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- Docs: Restauration des descriptions détaillées des pages du Dashboard dans le README.
 - Docs: Restauration de la documentation complète des événements métiers et finalisation du README.
 - Docs: Réinsertion de la section captures d'écran dans le README.
 - Docs: Réorganisation du README (Installation mise en avant).
