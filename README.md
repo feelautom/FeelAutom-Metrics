@@ -53,11 +53,7 @@ Le dashboard sera accessible sur `http://localhost:8080` (ou via votre domaine c
 
 | Dashboard Global | Analyse de Sécurité |
 | :---: | :---: |
-| ![Dashboard](./docs/screenshots/dashboard.png) | ![Security](./docs/screenshots/security.png) |
-
-| Flux de Logs | Statistiques avancées |
-| :---: | :---: |
-| ![Logs](./docs/screenshots/logs.png) | ![Analytics](./docs/screenshots/analytics.png) |
+| ![Dashboard](./docs/screenshots/dashboard.png) | ![Security](./docs/screenshots/security_soc.png) |
 
 ---
 
@@ -185,4 +181,4 @@ await http.PostAsJsonAsync("https://api-metrics.votre-domaine.fr/api/events", ne
 Distribué sous la licence **MIT**. Voir `LICENSE` pour plus d'informations.
 
 ---
-*Développé avec ❤️ par FeelAutom.*
+*Développé par FeelAutom.*
