@@ -10,236 +10,302 @@
 <PageTitle>FeelAutom-Metrics | Paramètres</PageTitle>
 
 <div class="container-fluid py-4">
-    <h1 class="h3 text-white mb-4"><i class="bi bi-gear-fill me-2"></i>Paramètres</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 text-white mb-0"><i class="bi bi-gear-fill me-2 text-primary"></i>Paramètres Système</h1>
+        <div class="text-muted small">Version @Configuration["Version"]</div>
+    </div>
 
-    <!-- AI Analyst Section -->
-    <div class="card bg-dark border-secondary text-white shadow mb-4">
-        <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
-            <div>
-                <h5 class="mb-0"><i class="bi bi-robot me-2"></i>Analyste IA (Gemini)</h5>
-                <small class="text-muted">Configuration et instructions de l'analyste SOC intelligent.</small>
-            </div>
-            <div>
-                @if (aiEnabled)
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-tabs border-secondary mb-0">
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "ai" ? "active text-primary" : "text-muted")" @onclick='() => activeTab = "ai"'>
+                <i class="bi bi-robot me-2"></i>Analyste IA
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "excluded" ? "active text-info" : "text-muted")" @onclick='() => activeTab = "excluded"'>
+                <i class="bi bi-eye-slash me-2"></i>Exclusions d'IPs
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "db" ? "active text-warning" : "text-muted")" @onclick='() => activeTab = "db"'>
+                <i class="bi bi-database me-2"></i>Maintenance BDD
+            </button>
+        </li>
+    </ul>
+
+    <div class="card bg-dark border-secondary text-white shadow border-top-0 mb-4" style="border-top-left-radius: 0; border-top-right-radius: 0;">
+        <div class="card-body p-4">
+
+            @* ===== TAB: ANALYSTE IA ===== *@
+            @if (activeTab == "ai")
+            {
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <h5 class="text-white mb-1"><i class="bi bi-robot me-2 text-primary"></i>Analyste SOC Intelligent</h5>
+                        <p class="text-muted small">Configuration des instructions envoyées à Gemini pour l'analyse des menaces.</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        @if (aiEnabled)
+                        {
+                            <span class="badge bg-success p-2"><i class="bi bi-check-circle me-1"></i>IA Opérationnelle</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger p-2"><i class="bi bi-x-circle me-1"></i>IA Désactivée</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="row mb-4 g-3">
+                    <div class="col-md-4">
+                        <div class="bg-black p-3 rounded border border-secondary h-100">
+                            <label class="text-muted small text-uppercase fw-bold mb-2">Fréquence d'analyse</label>
+                            <div class="h5 mb-0 text-white">@aiInterval minutes</div>
+                            <small class="text-muted">Délai entre deux scans de logs.</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="bg-black p-3 rounded border border-secondary h-100">
+                            <label class="text-muted small text-uppercase fw-bold mb-2">Modèle Actif</label>
+                            <div class="h5 mb-0 text-info">gemini-3.1-pro-preview</div>
+                            <small class="text-muted">Moteur d'intelligence artificielle.</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="bg-black p-3 rounded border border-secondary h-100">
+                            <label class="text-muted small text-uppercase fw-bold mb-2">Auto-Ban</label>
+                            <div class="h5 mb-0 text-warning">Activé</div>
+                            <small class="text-muted">Décisions appliquées automatiquement.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-end mb-2">
+                        <label class="text-muted small text-uppercase fw-bold">Instructions Système (Prompt Template)</label>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="ResetAiPrompt" disabled="@savingPrompt">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Défaut
+                            </button>
+                            <button class="btn btn-primary btn-sm" @onclick="SaveAiPrompt" disabled="@savingPrompt">
+                                @if (savingPrompt)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-save me-1"></i>
+                                }
+                                Enregistrer
+                            </button>
+                        </div>
+                    </div>
+                    <textarea class="form-control bg-black text-success font-monospace p-3 border-secondary" 
+                              rows="18" @bind="aiPrompt" style="font-size: 0.85rem; resize: vertical;"></textarea>
+                    
+                    <div class="mt-3 p-3 bg-black rounded border border-secondary">
+                        <h6 class="small text-muted text-uppercase fw-bold mb-2">Placeholders disponibles :</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            <code class="text-info bg-dark px-2 rounded">@("{{BANS}}")</code>
+                            <code class="text-info bg-dark px-2 rounded">@("{{WHITELIST}}")</code>
+                            <code class="text-info bg-dark px-2 rounded">@("{{SCORES}}")</code>
+                            <code class="text-info bg-dark px-2 rounded">@("{{THREATS}}")</code>
+                            <code class="text-info bg-dark px-2 rounded">@("{{SEUIL}}")</code>
+                        </div>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="bi bi-info-circle me-1"></i>Ces variables seront remplacées par les données réelles lors de l'appel à l'IA.
+                        </small>
+                    </div>
+                </div>
+            }
+
+            @* ===== TAB: EXCLUDED IPS ===== *@
+            @if (activeTab == "excluded")
+            {
+                <div class="mb-4">
+                    <h5 class="text-white mb-1"><i class="bi bi-eye-slash me-2 text-info"></i>IPs Exclues du Trafic</h5>
+                    <p class="text-muted small">Ces adresses IP seront masquées dans toutes les vues (Dashboard, Logs, Analyses, Sécurité).</p>
+                </div>
+
+                <!-- Add form -->
+                <div class="d-flex gap-2 mb-4 bg-black p-3 rounded border border-secondary">
+                    <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           placeholder="Adresse IP (ex: 82.65.12.34)" @bind="newIp" @bind:event="oninput"
+                           @onkeydown="OnKeyDown" style="max-width: 250px;" />
+                    <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           placeholder="Label (ex: Mon bureau, VPN...)" @bind="newLabel" @bind:event="oninput"
+                           @onkeydown="OnKeyDown" style="max-width: 250px;" />
+                    <button class="btn btn-info btn-sm" @onclick="AddExcludedIp" disabled="@string.IsNullOrWhiteSpace(newIp)">
+                        <i class="bi bi-plus-lg me-1"></i>Ajouter l'exclusion
+                    </button>
+                </div>
+
+                @if (excludedIps == null)
                 {
-                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Actif</span>
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-info" role="status"></div>
+                    </div>
+                }
+                else if (!excludedIps.Any())
+                {
+                    <div class="alert alert-dark border-secondary text-center py-4">
+                        <i class="bi bi-info-circle me-2"></i>Aucune IP exclue. Ajoutez votre IP pour masquer votre propre trafic.
+                    </div>
                 }
                 else
                 {
-                    <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Désactivé</span>
-                }
-            </div>
-        </div>
-        <div class="card-body">
-            <div class="row mb-4">
-                <div class="col-md-6">
-                    <label class="text-muted small text-uppercase mb-2">Intervalle d'analyse</label>
-                    <div class="h5 text-white">Toutes les @aiInterval minutes</div>
-                </div>
-                <div class="col-md-6 text-end">
-                    <label class="text-muted small text-uppercase mb-2">Modèle utilisé</label>
-                    <div class="h5 text-info">gemini-3.1-pro-preview</div>
-                </div>
-            </div>
-
-            <div class="mb-3">
-                <label class="text-muted small text-uppercase mb-2">Instructions Système (Prompt)</label>
-                <div class="bg-black rounded p-3 border border-secondary" style="max-height: 400px; overflow-y: auto;">
-                    <pre class="mb-0 text-success small font-monospace" style="white-space: pre-wrap;">@aiPrompt</pre>
-                </div>
-                <small class="text-muted mt-2 d-block">
-                    <i class="bi bi-info-circle me-1"></i>Ce prompt est envoyé à Gemini avec les logs suspects pour décider des bannissements automatiques.
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <!-- Excluded IPs -->
-    <div class="card bg-dark border-secondary text-white shadow mb-4">
-        <div class="card-header bg-transparent border-secondary py-3">
-            <h5 class="mb-0"><i class="bi bi-eye-slash me-2"></i>IPs Exclues du Trafic</h5>
-            <small class="text-muted">Ces adresses IP seront masquées dans toutes les vues (Dashboard, Logs, Analyses, Sécurité).</small>
-        </div>
-        <div class="card-body">
-            <!-- Add form -->
-            <div class="d-flex gap-2 mb-4">
-                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary"
-                       placeholder="Adresse IP (ex: 82.65.12.34)" @bind="newIp" @bind:event="oninput"
-                       @onkeydown="OnKeyDown" style="max-width: 250px;" />
-                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary"
-                       placeholder="Label (ex: Mon bureau, VPN...)" @bind="newLabel" @bind:event="oninput"
-                       @onkeydown="OnKeyDown" style="max-width: 250px;" />
-                <button class="btn btn-primary btn-sm" @onclick="AddExcludedIp" disabled="@string.IsNullOrWhiteSpace(newIp)">
-                    <i class="bi bi-plus-lg me-1"></i>Ajouter
-                </button>
-            </div>
-
-            @if (excludedIps == null)
-            {
-                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-            }
-            else if (!excludedIps.Any())
-            {
-                <p class="text-muted mb-0">Aucune IP exclue. Ajoutez votre IP pour masquer votre propre trafic.</p>
-            }
-            else
-            {
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Adresse IP</th>
-                                <th>Label</th>
-                                <th>Ajoutée le</th>
-                                <th class="text-end">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var ip in excludedIps)
-                            {
-                                <tr class="align-middle">
-                                    <td class="font-monospace text-info fw-bold">@ip.IpAddress</td>
-                                    <td class="text-muted">@(ip.Label ?? "-")</td>
-                                    <td class="small text-muted">@ip.CreatedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</td>
-                                    <td class="text-end">
-                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => RemoveExcludedIp(ip.Id)">
-                                            <i class="bi bi-trash me-1"></i>Supprimer
-                                        </button>
-                                    </td>
+                    <div class="table-responsive rounded border border-secondary">
+                        <table class="table table-dark table-hover mb-0">
+                            <thead>
+                                <tr class="text-muted small text-uppercase">
+                                    <th class="ps-3">Adresse IP</th>
+                                    <th>Label / Identification</th>
+                                    <th>Ajoutée le</th>
+                                    <th class="text-end pe-3">Action</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                @foreach (var ip in excludedIps)
+                                {
+                                    <tr class="align-middle">
+                                        <td class="ps-3 font-monospace text-info fw-bold">@ip.IpAddress</td>
+                                        <td>@(ip.Label ?? "-")</td>
+                                        <td class="small text-muted">@ip.CreatedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td class="text-end pe-3">
+                                            <button class="btn btn-outline-danger btn-sm" @onclick="() => RemoveExcludedIp(ip.Id)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             }
-        </div>
-    </div>
 
-    <!-- Database Stats -->
-    <div class="card bg-dark border-secondary text-white shadow mb-4">
-        <div class="card-header bg-transparent border-secondary py-3 d-flex justify-content-between align-items-center">
-            <div>
-                <h5 class="mb-0"><i class="bi bi-database me-2"></i>Base de Données</h5>
-                <small class="text-muted">Statistiques et maintenance de la base PostgreSQL.</small>
-            </div>
-            <button class="btn btn-outline-info btn-sm" @onclick="LoadDbStats" disabled="@dbLoading">
-                <i class="bi bi-arrow-repeat me-1 @(dbLoading ? "spin" : "")"></i>Rafraîchir
-            </button>
-        </div>
-        <div class="card-body">
-            @if (dbStats == null)
+            @* ===== TAB: DATABASE ===== *@
+            @if (activeTab == "db")
             {
-                <div class="spinner-border spinner-border-sm text-info" role="status"></div>
-            }
-            else
-            {
-                <!-- Taille globale -->
-                <div class="row mb-4">
-                    <div class="col-md-3">
-                        <div class="card bg-dark border-info">
-                            <div class="card-body text-center py-3">
-                                <div class="text-muted text-uppercase small">Taille Totale</div>
-                                <h3 class="mb-0 @(dbStats.TotalSizeMb > 500 ? "text-danger" : dbStats.TotalSizeMb > 200 ? "text-warning" : "text-info")">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h5 class="text-white mb-1"><i class="bi bi-database me-2 text-warning"></i>Maintenance de la Base de Données</h5>
+                        <p class="text-muted small mb-0">Analyse de la volumétrie et purge des anciennes données.</p>
+                    </div>
+                    <button class="btn btn-outline-warning btn-sm" @onclick="LoadDbStats" disabled="@dbLoading">
+                        <i class="bi bi-arrow-repeat me-1 @(dbLoading ? "spin" : "")"></i>Actualiser
+                    </button>
+                </div>
+
+                @if (dbStats == null)
+                {
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-warning" role="status"></div>
+                    </div>
+                }
+                else
+                {
+                    <div class="row mb-4 g-3">
+                        <div class="col-md-3">
+                            <div class="bg-black p-3 rounded border border-secondary h-100 text-center">
+                                <div class="text-muted text-uppercase small mb-1">Taille Totale</div>
+                                <h3 class="mb-0 @(dbStats.TotalSizeMb > 500 ? "text-danger" : dbStats.TotalSizeMb > 200 ? "text-warning" : "text-success")">
                                     @FormatSize(dbStats.TotalSizeBytes)
                                 </h3>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-dark border-secondary">
-                            <div class="card-body text-center py-3">
-                                <div class="text-muted text-uppercase small">Logs d'Accès</div>
+                        <div class="col-md-3">
+                            <div class="bg-black p-3 rounded border border-secondary h-100 text-center">
+                                <div class="text-muted text-uppercase small mb-1">Logs Réseau</div>
                                 <h3 class="mb-0 text-white">@dbStats.LogCount.ToString("N0")</h3>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-dark border-secondary">
-                            <div class="card-body text-center py-3">
-                                <div class="text-muted text-uppercase small">Événements App</div>
+                        <div class="col-md-3">
+                            <div class="bg-black p-3 rounded border border-secondary h-100 text-center">
+                                <div class="text-muted text-uppercase small mb-1">Événements App</div>
                                 <h3 class="mb-0 text-white">@dbStats.EventCount.ToString("N0")</h3>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-dark border-secondary">
-                            <div class="card-body text-center py-3">
-                                <div class="text-muted text-uppercase small">Scores Menace</div>
+                        <div class="col-md-3">
+                            <div class="bg-black p-3 rounded border border-secondary h-100 text-center">
+                                <div class="text-muted text-uppercase small mb-1">Scores de Menace</div>
                                 <h3 class="mb-0 text-white">@dbStats.ThreatScoreCount.ToString("N0")</h3>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Détail par table -->
-                <div class="table-responsive mb-4">
-                    <table class="table table-dark table-sm mb-0">
-                        <thead>
-                            <tr class="text-muted text-uppercase small">
-                                <th>Table</th>
-                                <th class="text-end">Lignes</th>
-                                <th class="text-end">Taille</th>
-                                <th>Barre</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var t in dbStats.Tables)
-                            {
-                                <tr class="align-middle">
-                                    <td class="font-monospace text-info">@t.Name</td>
-                                    <td class="text-end">@t.RowCount.ToString("N0")</td>
-                                    <td class="text-end fw-bold">@FormatSize(t.SizeBytes)</td>
-                                    <td style="min-width: 120px;">
-                                        <div class="progress bg-secondary" style="height: 5px;">
-                                            <div class="progress-bar bg-info" style="width: @(dbStats.TotalSizeBytes > 0 ? (double)t.SizeBytes / dbStats.TotalSizeBytes * 100 : 0)%"></div>
-                                        </div>
-                                    </td>
+                    <div class="table-responsive rounded border border-secondary mb-4">
+                        <table class="table table-dark table-sm mb-0 align-middle">
+                            <thead>
+                                <tr class="text-muted text-uppercase small">
+                                    <th class="ps-3">Table</th>
+                                    <th class="text-end">Lignes</th>
+                                    <th class="text-end">Taille</th>
+                                    <th class="pe-3">Utilisation</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                @foreach (var t in dbStats.Tables)
+                                {
+                                    <tr>
+                                        <td class="ps-3 font-monospace text-warning">@t.Name</td>
+                                        <td class="text-end">@t.RowCount.ToString("N0")</td>
+                                        <td class="text-end fw-bold">@FormatSize(t.SizeBytes)</td>
+                                        <td class="pe-3" style="min-width: 150px;">
+                                            <div class="progress bg-dark" style="height: 6px;">
+                                                <div class="progress-bar bg-warning" style="width: @(dbStats.TotalSizeBytes > 0 ? (double)t.SizeBytes / dbStats.TotalSizeBytes * 100 : 0)%"></div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
 
-                @if (dbStats.OldestLog != null)
-                {
-                    <div class="text-muted small mb-3">
-                        <i class="bi bi-clock-history me-1"></i>Plus ancien log : @dbStats.OldestLog.Value.LocalDateTime.ToString("dd/MM/yyyy HH:mm")
-                        — Plage couverte : @((DateTimeOffset.UtcNow - dbStats.OldestLog.Value).Days) jours
+                    <div class="p-3 bg-black rounded border border-secondary">
+                        <h6 class="text-muted text-uppercase small mb-3"><i class="bi bi-trash me-2 text-warning"></i>Nettoyage des données</h6>
+                        <div class="row align-items-center g-3">
+                            <div class="col-auto">
+                                <span class="text-muted small">Purger les logs et événements de plus de</span>
+                            </div>
+                            <div class="col-auto">
+                                <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 120px;"
+                                        @bind="purgeDays">
+                                    <option value="7">7 jours</option>
+                                    <option value="14">14 jours</option>
+                                    <option value="30">30 jours</option>
+                                    <option value="60">60 jours</option>
+                                    <option value="90">90 jours</option>
+                                </select>
+                            </div>
+                            <div class="col-auto">
+                                <button class="btn btn-warning btn-sm" @onclick="PurgeLogs" disabled="@purging">
+                                    @if (purging)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        Purge en cours...
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-trash me-1"></i>
+                                        <span>Exécuter la purge</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-3 small text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            @if (dbStats.OldestLog != null)
+                            {
+                                <span>Rétention actuelle : <strong>@((DateTimeOffset.UtcNow - dbStats.OldestLog.Value).Days) jours</strong> (depuis le @dbStats.OldestLog.Value.LocalDateTime.ToString("dd/MM/yy")).</span>
+                            }
+                            Le système purge automatiquement les données de plus de 60 jours chaque nuit.
+                        </div>
                     </div>
                 }
-
-                <!-- Rétention -->
-                <div class="border-top border-secondary pt-3">
-                    <h6 class="text-muted text-uppercase small mb-3">Rotation des Données</h6>
-                    <div class="d-flex gap-3 align-items-center">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="text-muted small">Supprimer les logs de plus de</span>
-                            <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 120px;"
-                                    @bind="purgeDays">
-                                <option value="7">7 jours</option>
-                                <option value="14">14 jours</option>
-                                <option value="30">30 jours</option>
-                                <option value="60">60 jours</option>
-                                <option value="90">90 jours</option>
-                            </select>
-                        </div>
-                        <button class="btn btn-warning btn-sm" @onclick="PurgeLogs" disabled="@purging">
-                            @if (purging)
-                            {
-                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                            }
-                            else
-                            {
-                                <i class="bi bi-trash me-1"></i>
-                            }
-                            Purger maintenant
-                        </button>
-                    </div>
-                    <small class="text-muted d-block mt-2">
-                        <i class="bi bi-info-circle me-1"></i>La rétention automatique est configurée à 60 jours (exécutée quotidiennement).
-                    </small>
-                </div>
             }
+
         </div>
     </div>
 </div>
@@ -262,11 +328,13 @@
     private string? statusMessage;
     private string statusClass = "success";
     private string statusIcon = "bi-check-circle-fill";
+    private string activeTab = "ai";
 
     // AI Analyst
     private bool aiEnabled;
     private int aiInterval;
     private string aiPrompt = "";
+    private bool savingPrompt;
 
     // DB Stats
     private DbStatsModel? dbStats;
@@ -278,15 +346,59 @@
     {
         await LoadData();
         await LoadDbStats();
-        LoadAiSettings();
+        await LoadAiSettings();
     }
 
-    private void LoadAiSettings()
+    private async Task LoadAiSettings()
     {
         aiEnabled = !string.IsNullOrEmpty(Configuration["AiAnalyst:GeminiApiKey"]);
         var intervalStr = Configuration["AiAnalyst:IntervalMinutes"];
         aiInterval = int.TryParse(intervalStr, out var iv) ? iv : 15;
+        
+        using var context = await DbFactory.CreateDbContextAsync();
+        var customPrompt = await context.SystemSettings
+            .Where(s => s.Key == "AiSystemPrompt")
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+            
+        aiPrompt = !string.IsNullOrEmpty(customPrompt) ? customPrompt : AiAnalystService.GetSystemPromptTemplate();
+    }
+
+    private async Task SaveAiPrompt()
+    {
+        savingPrompt = true;
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var setting = await context.SystemSettings.FirstOrDefaultAsync(s => s.Key == "AiSystemPrompt");
+            
+            if (setting == null)
+            {
+                context.SystemSettings.Add(new SystemSetting { Key = "AiSystemPrompt", Value = aiPrompt });
+            }
+            else
+            {
+                setting.Value = aiPrompt;
+                setting.LastModified = DateTimeOffset.UtcNow;
+            }
+            
+            await context.SaveChangesAsync();
+            await ShowStatus("Prompt IA sauvegardé avec succès.", "success", "bi-check-circle-fill");
+        }
+        catch (Exception ex)
+        {
+            await ShowStatus($"Erreur lors de la sauvegarde : {ex.Message}", "danger", "bi-x-circle-fill");
+        }
+        finally
+        {
+            savingPrompt = false;
+        }
+    }
+
+    private async Task ResetAiPrompt()
+    {
         aiPrompt = AiAnalystService.GetSystemPromptTemplate();
+        await ShowStatus("Template par défaut restauré (cliquez sur Enregistrer pour confirmer).", "info", "bi-info-circle");
     }
 
     private async Task LoadData()

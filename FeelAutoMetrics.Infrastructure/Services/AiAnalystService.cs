@@ -93,6 +93,12 @@ public class AiAnalystService : BackgroundService
         var excludedIps = await db.ExcludedIps.Select(e => e.IpAddress).ToListAsync(ct);
         var whitelistedIps = _config["Security:WhitelistedIps"]?.Split(',').Select(i => i.Trim()).ToList() ?? [];
 
+        // Récupérer le prompt personnalisé si existant
+        var customPrompt = await db.SystemSettings
+            .Where(s => s.Key == "AiSystemPrompt")
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync(ct);
+
         // Filtrer les IPs exclues, whitelistées et déjà bannies
         var allExcluded = new HashSet<string>(excludedIps.Concat(whitelistedIps).Concat(activeBans));
         var filteredThreats = threats.Where(l => !allExcluded.Contains(l.ClientHost)).ToList();
@@ -104,7 +110,7 @@ public class AiAnalystService : BackgroundService
         }
 
         // Construire le résumé compact pour Gemini
-        var prompt = BuildPrompt(filteredThreats, activeBans, whitelistedIps, threatScores);
+        var prompt = BuildPrompt(filteredThreats, activeBans, whitelistedIps, threatScores, customPrompt);
 
         // Appeler Gemini
         var (response, geminiError) = await CallGeminiAsync(apiKey, prompt, ct);
@@ -160,94 +166,70 @@ public class AiAnalystService : BackgroundService
         _logger.LogInformation("AI Analyst : {LogCount} logs analysés, {Actions} actions", filteredThreats.Count, actionCount);
     }
 
-    public static string GetSystemPromptTemplate()
+    private string BuildPrompt(List<GlobalAccessLog> threats, List<string> activeBans, List<string> whitelistedIps, List<IpThreatScore> threatScores, string? customTemplate)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine("Tu es un analyste SOC (Security Operations Center) pour une infrastructure web.");
-        sb.AppendLine("Tu surveilles le trafic Traefik (reverse proxy) de plusieurs sites.");
-        sb.AppendLine();
-        sb.AppendLine("CONTEXTE :");
-        sb.AppendLine("- IPs actuellement bannies");
-        sb.AppendLine("- IPs whitelistées (JAMAIS bannir)");
-        sb.AppendLine("- Seuil auto-ban : 200 points");
-        sb.AppendLine();
-        sb.AppendLine("SCORES DE MENACE EN COURS (IPs non encore bannies qui accumulent des points) :");
-        sb.AppendLine("  [Liste des scores]");
-        sb.AppendLine();
-        sb.AppendLine("MENACES DETECTEES (événements suspects récents) :");
-        sb.AppendLine("  [Détails des logs par IP]");
-        sb.AppendLine();
-        sb.AppendLine("REGLES DE DECISION :");
-        sb.AppendLine("- BANNIR : les IPs avec un score >= 100 ET un comportement clairement malveillant (scan, exploit, brute force)");
-        sb.AppendLine("- BANNIR : les IPs qui cumulent plusieurs types de menaces différents");
-        sb.AppendLine("- NE PAS BANNIR : les IPs whitelistées (JAMAIS)");
-        sb.AppendLine("- NE PAS BANNIR : les IPs déjà bannies");
-        sb.AppendLine("- NE PAS BANNIR : les IPs Cloudflare car ce sont des proxies");
-        sb.AppendLine("- EN CAS DE DOUTE : ne pas bannir. Mieux vaut laisser passer que bloquer un utilisateur légitime.");
-        sb.AppendLine();
-        sb.AppendLine("REPONSE ATTENDUE :");
-        sb.AppendLine("Réponds UNIQUEMENT avec un JSON valide, sans markdown, sans commentaire :");
-        sb.AppendLine("""
-        {
-          "analysis": "Résumé court de ton analyse (2-3 phrases)",
-          "actions": [
-            {"ip": "x.x.x.x", "action": "ban", "reason": "Explication courte du pourquoi"}
-          ]
-        }
-        """);
-        return sb.ToString();
-    }
+        var template = !string.IsNullOrEmpty(customTemplate) ? customTemplate : GetDefaultPromptTemplate();
 
-    private string BuildPrompt(List<GlobalAccessLog> threats, List<string> activeBans, List<string> whitelistedIps, List<IpThreatScore> threatScores)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("Tu es un analyste SOC (Security Operations Center) pour une infrastructure web.");
-        sb.AppendLine("Tu surveilles le trafic Traefik (reverse proxy) de plusieurs sites.");
-        sb.AppendLine();
-        sb.AppendLine("CONTEXTE :");
-        sb.AppendLine($"- IPs actuellement bannies ({activeBans.Count}) : {string.Join(", ", activeBans.Take(30))}");
-        sb.AppendLine($"- IPs whitelistées (JAMAIS bannir) : {(whitelistedIps.Any() ? string.Join(", ", whitelistedIps) : "aucune")}");
-        sb.AppendLine($"- Seuil auto-ban : 200 points");
-        sb.AppendLine();
-
-        // === SCORES DE MENACE ===
-        sb.AppendLine("SCORES DE MENACE EN COURS (IPs non encore bannies qui accumulent des points) :");
+        // Préparer les données dynamiques
+        var bansList = string.Join(", ", activeBans.Take(30));
+        var whitelistList = whitelistedIps.Any() ? string.Join(", ", whitelistedIps) : "aucune";
+        
+        var scoresSb = new StringBuilder();
         if (threatScores.Any())
         {
             foreach (var s in threatScores.Where(s => !activeBans.Contains(s.IpAddress)).Take(30))
             {
-                sb.AppendLine($"  {s.IpAddress} — Score: {s.Score}/200 — Première vue: {s.FirstSeen:dd/MM HH:mm} — Dernier hit: {s.LastHit:dd/MM HH:mm:ss}");
+                scoresSb.AppendLine($"  {s.IpAddress} — Score: {s.Score}/200 — Première vue: {s.FirstSeen:dd/MM HH:mm} — Dernier hit: {s.LastHit:dd/MM HH:mm:ss}");
             }
         }
         else
         {
-            sb.AppendLine("  Aucun score en cours.");
+            scoresSb.AppendLine("  Aucun score en cours.");
         }
-        sb.AppendLine();
 
-        // === MENACES DETECTEES ===
-        sb.AppendLine($"MENACES DETECTEES ({threats.Count} événements suspects) :");
-        sb.AppendLine();
-
+        var threatsSb = new StringBuilder();
         var byIp = threats.GroupBy(l => l.ClientHost).OrderByDescending(g => g.Count());
-
         foreach (var group in byIp.Take(50))
         {
             var score = threatScores.FirstOrDefault(s => s.IpAddress == group.Key);
             var scoreInfo = score != null ? $" [Score: {score.Score}/200]" : "";
-            sb.AppendLine($"--- IP: {group.Key} ({group.Count()} menaces){scoreInfo} ---");
-
+            threatsSb.AppendLine($"--- IP: {group.Key} ({group.Count()} menaces){scoreInfo} ---");
             foreach (var log in group.Take(20))
             {
-                sb.AppendLine($"  {log.Timestamp:HH:mm:ss} | {log.RequestHost} | {log.RequestMethod} {log.RequestPath} | {log.ResponseStatusCode} | {log.ThreatType} | {log.BrowserName ?? log.UserAgentBrut[..Math.Min(40, log.UserAgentBrut.Length)]}");
+                threatsSb.AppendLine($"  {log.Timestamp:HH:mm:ss} | {log.RequestHost} | {log.RequestMethod} {log.RequestPath} | {log.ResponseStatusCode} | {log.ThreatType} | {log.BrowserName ?? log.UserAgentBrut[..Math.Min(40, log.UserAgentBrut.Length)]}");
             }
-
-            if (group.Count() > 20)
-                sb.AppendLine($"  ... et {group.Count() - 20} autres menaces");
-
-            sb.AppendLine();
+            if (group.Count() > 20) threatsSb.AppendLine($"  ... et {group.Count() - 20} autres menaces");
+            threatsSb.AppendLine();
         }
 
+        // Injecter dans le template
+        var prompt = template
+            .Replace("{{BANS}}", bansList)
+            .Replace("{{WHITELIST}}", whitelistList)
+            .Replace("{{SCORES}}", scoresSb.ToString())
+            .Replace("{{THREATS}}", threatsSb.ToString())
+            .Replace("{{SEUIL}}", "200");
+
+        return prompt;
+    }
+
+    private static string GetDefaultPromptTemplate()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Tu es un analyste SOC (Security Operations Center) pour une infrastructure web.");
+        sb.AppendLine("Tu surveilles le trafic Traefik (reverse proxy) de plusieurs sites.");
+        sb.AppendLine();
+        sb.AppendLine("CONTEXTE :");
+        sb.AppendLine("- IPs actuellement bannies : {{BANS}}");
+        sb.AppendLine("- IPs whitelistées (JAMAIS bannir) : {{WHITELIST}}");
+        sb.AppendLine("- Seuil auto-ban : {{SEUIL}} points");
+        sb.AppendLine();
+        sb.AppendLine("SCORES DE MENACE EN COURS (IPs non encore bannies qui accumulent des points) :");
+        sb.AppendLine("{{SCORES}}");
+        sb.AppendLine();
+        sb.AppendLine("MENACES DETECTEES (événements suspects récents) :");
+        sb.AppendLine("{{THREATS}}");
+        sb.AppendLine();
         sb.AppendLine("REGLES DE DECISION :");
         sb.AppendLine("- BANNIR : les IPs avec un score >= 100 ET un comportement clairement malveillant (scan, exploit, brute force)");
         sb.AppendLine("- BANNIR : les IPs qui cumulent plusieurs types de menaces différents");
@@ -267,8 +249,12 @@ public class AiAnalystService : BackgroundService
         }
         """);
         sb.AppendLine("Si aucune action n'est nécessaire, retourne un tableau actions vide.");
-
         return sb.ToString();
+    }
+
+    public static string GetSystemPromptTemplate()
+    {
+        return GetDefaultPromptTemplate();
     }
 
     private async Task<(string? Response, string? Error)> CallGeminiAsync(string apiKey, string prompt, CancellationToken ct)

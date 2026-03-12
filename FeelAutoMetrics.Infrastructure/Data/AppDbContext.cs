@@ -15,10 +15,19 @@ public class AppDbContext : DbContext
     public DbSet<ExcludedIp> ExcludedIps { get; set; }
     public DbSet<IpThreatScore> IpThreatScores { get; set; }
     public DbSet<AiAnalysis> AiAnalyses { get; set; }
+    public DbSet<SystemSetting> SystemSettings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Configuration SystemSetting
+        modelBuilder.Entity<SystemSetting>(entity =>
+        {
+            entity.HasKey(e => e.Key);
+            entity.Property(e => e.Key).HasMaxLength(100);
+            entity.Property(e => e.Value).IsRequired();
+        });
 
         // Configuration GlobalAccessLog (déjà présente)
         modelBuilder.Entity<GlobalAccessLog>(entity =>
