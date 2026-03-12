@@ -8,12 +8,26 @@ obj/
 
 ## Node
 node_modules/
+dist/
+npm-debug.log*
 
 ## IDE
 .vs/
 .idea/
 *.swp
+*.sublime-project
+*.sublime-workspace
 
 ## OS
 Thumbs.db
 .DS_Store
+
+## Secrets & Config
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.ppk
+security/
+keys/
