@@ -120,7 +120,7 @@ app.MapGet("/api/security/check", async (HttpContext ctx, [FromServices] IDbCont
 // Root endpoint for health check
 app.MapGet("/", () => Results.Ok(new
 {
-    Name = "FeelAuto-Metrics Ingestor",
+    Name = "FeelAutom-Metrics Ingestor",
     Status = "Online",
     Time = DateTimeOffset.UtcNow
 }))
