@@ -103,17 +103,37 @@ async Task<HashSet<string>> GetBannedIpsAsync(IDbContextFactory<AppDbContext> fa
 
 // Endpoint ForwardAuth : Traefik appelle cet endpoint avant chaque requête
 // Retourne 200 si l'IP est autorisée, 403 si bannie
-app.MapGet("/api/security/check", async (HttpContext ctx, [FromServices] IDbContextFactory<AppDbContext> dbFactory) =>
+// Implémente le TARPITTING (quarantaine) pour les IPs suspectes (score 100-200)
+app.MapGet("/api/security/check", async (HttpContext ctx, [FromServices] IDbContextFactory<AppDbContext> dbFactory, [FromServices] ISecurityService securityService) =>
 {
     // Traefik envoie l'IP originale dans X-Forwarded-For
     var clientIp = ctx.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',').First().Trim()
         ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "";
 
+    // 1. Check Whitelist (prioritaire, pas de ralentissement)
+    if (securityService.IsWhitelisted(clientIp)) return Results.Ok();
+
+    // 2. Check Ban définitif (403 direct)
     var banned = await GetBannedIpsAsync(dbFactory);
     if (banned.Contains(clientIp))
     {
         return Results.StatusCode(403);
     }
+
+    // 3. Check Score pour Quarantaine (Tarpitting)
+    var score = await securityService.GetIpScoreAsync(clientIp);
+    if (score >= 200)
+    {
+        return Results.StatusCode(403); // Devrait déjà être banni mais sécurité supplémentaire
+    }
+    
+    if (score >= 100)
+    {
+        // IP Suspecte : on ralentit la progression pour décourager les bots
+        // 15 secondes de délai — Traefik attendra ce délai avant de router vers le site
+        await Task.Delay(15000);
+    }
+
     return Results.Ok();
 }).WithName("IpBanCheck");
 

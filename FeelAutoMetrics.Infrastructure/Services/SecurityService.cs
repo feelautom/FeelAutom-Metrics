@@ -11,6 +11,7 @@ public interface ISecurityService
 {
     Task AnalyzeLogAsync(GlobalAccessLog log);
     bool IsWhitelisted(string ip);
+    Task<int> GetIpScoreAsync(string ip);
 }
 
 public class SecurityService : ISecurityService
@@ -25,6 +26,40 @@ public class SecurityService : ISecurityService
     // Fenêtres de détection pour les rafales (bursts)
     private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _error500Bursts = new();
     private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _requestBursts = new();
+
+    // Cache des scores pour la quarantaine (évite de taper la DB à chaque check Traefik)
+    private static readonly ConcurrentDictionary<string, (int Score, DateTimeOffset Expiry)> _quarantineCache = new();
+    private static readonly object _quarantineLock = new();
+
+    public async Task<int> GetIpScoreAsync(string ip)
+    {
+        // 1. Vérifier le cache mémoire temps réel
+        if (_threatScores.TryGetValue(ip, out var scoreInfo))
+            return scoreInfo.Score;
+
+        // 2. Vérifier le cache de quarantaine (valide 30s)
+        if (_quarantineCache.TryGetValue(ip, out var qInfo) && DateTimeOffset.UtcNow < qInfo.Expiry)
+            return qInfo.Score;
+
+        // 3. Sinon, vérifier la base de données
+        try
+        {
+            using var db = await _dbFactory.CreateDbContextAsync();
+            var dbScore = await db.IpThreatScores
+                .Where(s => s.IpAddress == ip)
+                .Select(s => s.Score)
+                .FirstOrDefaultAsync();
+
+            // Mettre en cache pour 30s pour soulager la DB sur les prochains checks Traefik
+            _quarantineCache.AddOrUpdate(ip, (dbScore, DateTimeOffset.UtcNow.AddSeconds(30)), (_, _) => (dbScore, DateTimeOffset.UtcNow.AddSeconds(30)));
+            
+            return dbScore;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
 
     // === SIGNATURES DE MENACES ===
 

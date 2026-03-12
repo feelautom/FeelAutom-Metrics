@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-03-12
+- Feature: Implémentation de la Quarantaine (Tarpitting) avec ralentissement de 15s pour les IPs ayant un score entre 100 et 200.
 - Docs: Restauration complète des commentaires techniques dans le SecurityService et harmonisation de la logique de bannissement.
 - Feature: Redirection directe du Profil Visiteur vers le Profil SOC spécifique pour les IPs bannies.
 - UI: Rendre le badge banni cliquable pour renvoyer vers la page de sécurité.
