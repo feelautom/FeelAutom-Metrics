@@ -293,7 +293,7 @@ public class SecurityService : ISecurityService
             // On ignore les assets statiques et le prefetch Next.js
             var isStaticAsset = pathLower.StartsWith("/_next/") ||
                                 pathLower.StartsWith("/favicon") ||
-                                pathLower.Contains("/_rsc=") ||
+                                pathLower.Contains("_rsc=") ||
                                 pathLower.EndsWith(".css") ||
                                 pathLower.EndsWith(".js") ||
                                 pathLower.EndsWith(".png") ||
